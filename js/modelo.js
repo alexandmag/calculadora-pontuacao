@@ -50,10 +50,11 @@ export function montarModelo(estado) {
       const vagasDiretas = m.repescagem ? 1 : 2;
       const r = classificacaoColetiva({ grupos: info.grupos, jogos: info.jogos, esporte: info.esporte, vagasDiretas });
       info.tabelas = r.tabelas;
-      info.calculada = r.ordem;
       info.wo = r.wo;
       info.participantes = r.ordem.length;
       info.temDados = info.jogos.some((j) => placarEfetivo(j, info.esporte));
+      // Sem nenhum resultado, a ordem seria só a da lista de atléticas: não projeta pontos.
+      info.calculada = info.temDados ? r.ordem : [];
     } else if (m.tipo === 'provas') {
       info.resultados = Object.fromEntries(
         m.provas.map((p) => [p.id, estado.resultados[chaveResultado(m.id, p.id)]?.linhas || []]),
