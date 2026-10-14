@@ -1,12 +1,44 @@
 rules_version = '2';
 
-// Placar INTERPUC: sem login. Quem tem o link lê e edita os dados da edição.
-// As gravações deixam de ser aceitas em 1º/03/2027; depois disso o placar fica só para consulta.
+// Placar INTERPUC: qualquer pessoa com o link vê o placar; só a equipe edita, entrando com Google.
+// A equipe fica em edicoes/{edicao}/acesso/equipe: { admins: [e-mails], editores: [e-mails] }.
+// O dono é reconhecido pelo SHA-256 do e-mail (o e-mail não fica no repositório) e é sempre
+// administrador, para nunca ficar trancado para fora. As gravações param em 1º/03/2027.
 service cloud.firestore {
   match /databases/{database}/documents {
+    function email() {
+      return request.auth != null && request.auth.token.email_verified == true
+        ? request.auth.token.email.lower()
+        : '';
+    }
+
+    function ehDono() {
+      return email() != ''
+        && hashing.sha256(email()).toHexString().lower() == 'a3445ce9f68e515d8afc2a389b4ffe4210b25481a31c2f9862375c2b152718d4';
+    }
+
+    function naEquipe(edicao, papel) {
+      let caminho = /databases/$(database)/documents/edicoes/$(edicao)/acesso/equipe;
+      return email() != '' && exists(caminho) && email() in get(caminho).data.get(papel, []);
+    }
+
+    function ehAdmin(edicao) {
+      return ehDono() || naEquipe(edicao, 'admins');
+    }
+
+    function ehEditor(edicao) {
+      return ehAdmin(edicao) || naEquipe(edicao, 'editores');
+    }
+
+    match /edicoes/{edicao}/acesso/equipe {
+      allow read: if ehEditor(edicao);
+      allow write: if ehAdmin(edicao);
+    }
+
     match /edicoes/{edicao}/{colecao}/{documento} {
       allow read: if colecao in ['config', 'modalidades', 'jogos', 'resultados', 'penalidades'];
       allow write: if colecao in ['config', 'modalidades', 'jogos', 'resultados', 'penalidades']
+        && ehEditor(edicao)
         && request.time < timestamp.date(2027, 3, 1);
     }
   }

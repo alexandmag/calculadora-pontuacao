@@ -1,6 +1,7 @@
 // Onde os dados ficam guardados.
-// Com o Firebase configurado (js/firebase-config.js), todo mundo que abre o link vê e edita os mesmos
-// dados, ao vivo. Sem ele, o app funciona só neste aparelho (localStorage), o que serve para testar.
+// Com o Firebase configurado (js/firebase-config.js), todo mundo que abre o link vê os mesmos dados,
+// ao vivo, e quem entra com uma conta Google da equipe edita. Sem ele, o app funciona só neste
+// aparelho (localStorage), sem login, o que serve para testar.
 
 export const COLECOES = ['config', 'modalidades', 'jogos', 'resultados', 'penalidades'];
 const EDICAO = '2026';
@@ -47,6 +48,8 @@ function criarLocal() {
   });
   return {
     modo: 'local',
+    conta: null,
+    equipe: null,
     ouvir(fn) {
       ouvintes.add(fn);
       fn(estado);
@@ -71,8 +74,14 @@ function criarLocal() {
 
 async function criarFirebase(config) {
   const base = `https://www.gstatic.com/firebasejs/${VERSAO_FIREBASE}`;
-  const [{ initializeApp }, fs] = await Promise.all([import(`${base}/firebase-app.js`), import(`${base}/firebase-firestore.js`)]);
+  const [{ initializeApp }, fs, au] = await Promise.all([
+    import(`${base}/firebase-app.js`),
+    import(`${base}/firebase-firestore.js`),
+    import(`${base}/firebase-auth.js`),
+  ]);
   const appFirebase = initializeApp(config);
+  // Com o Auth no mesmo app, o Firestore manda o login junto com cada gravação.
+  const autenticacao = au.getAuth(appFirebase);
   let db;
   try {
     // Guarda uma cópia no aparelho: o app abre e aceita lançamentos mesmo com sinal ruim na quadra.
@@ -108,8 +117,25 @@ async function criarFirebase(config) {
     );
   }
 
+  const docEquipe = fs.doc(db, 'edicoes', EDICAO, 'acesso', 'equipe');
+
   return {
     modo: 'compartilhado',
+    conta: {
+      ouvir: (fn) =>
+        au.onAuthStateChanged(autenticacao, (u) => fn(u ? { uid: u.uid, email: u.email || '', nome: u.displayName || '' } : null)),
+      entrar() {
+        const provedor = new au.GoogleAuthProvider();
+        provedor.setCustomParameters({ prompt: 'select_account' }); // deixa escolher a conta no celular com várias
+        return au.signInWithPopup(autenticacao, provedor);
+      },
+      sair: () => au.signOut(autenticacao),
+    },
+    // Lista de quem edita. Só a própria equipe consegue ler; para os outros o banco responde "sem permissão".
+    equipe: {
+      ouvir: (fn, falha) => fs.onSnapshot(docEquipe, (snap) => fn(snap.exists() ? snap.data() : { admins: [], editores: [] }), falha),
+      salvar: (dados) => fs.setDoc(docEquipe, limpar(dados)),
+    },
     ouvir(fn) {
       ouvintes.add(fn);
       if (carregadas.size === COLECOES.length) fn(estado);

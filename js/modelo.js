@@ -32,8 +32,10 @@ export function gruposDaModalidade(doc) {
   return Object.fromEntries(Object.entries(grupos).filter(([, membros]) => membros.length > 0));
 }
 
-export function montarModelo(estado) {
+// nossaLocal: atlética que esta pessoa escolheu destacar no próprio aparelho. Sem ela, vale a da equipe.
+export function montarModelo(estado, { nossaLocal = '' } = {}) {
   const config = estado.config.geral || {};
+  const nossa = ATLETICAS.some((a) => a.id === nossaLocal) ? nossaLocal : config.nossa || null;
   const nomes = Object.fromEntries(ATLETICAS.map((a) => [a.id, config.nomes?.[a.id]?.trim() || a.curto]));
   const jogos = Object.entries(estado.jogos).map(([id, j]) => ({ ...j, id }));
   const punicoes = Object.entries(estado.penalidades).map(([id, p]) => ({ ...p, id }));
@@ -118,7 +120,8 @@ export function montarModelo(estado) {
   return {
     config,
     nomes,
-    nossa: config.nossa || null,
+    nossa,
+    nossaPadrao: config.nossa || null,
     jogos,
     punicoes,
     ajustes,

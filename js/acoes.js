@@ -1,4 +1,5 @@
 // O que cada botão, seletor e formulário das telas faz (ligados por data-acao, data-mudar e data-form).
+// Ações que mudam dados conferem a permissão antes; o banco confere de novo no servidor.
 
 import { ATLETICAS } from './dados.js';
 import { app, aviso, gravar, salvarPreferencias } from './contexto.js';
@@ -12,7 +13,22 @@ import {
   folhaRemarcar,
   folhaRestaurar,
 } from './folhas.js';
+import { normalizarEmail } from './permissoes.js';
 import { hojeISO } from './util.js';
+
+// Só para quem pode editar (ou administrar). Quem não pode recebe um aviso em vez da ação.
+const soEditor =
+  (acao) =>
+  (...args) => {
+    if (app.pode.editar) return acao(...args);
+    aviso(app.usuario ? 'Sua conta não está na equipe. Peça a um administrador para incluí-la.' : 'Entre com uma conta da equipe para editar (Ajustes → Conta).', 'erro');
+  };
+const soAdmin =
+  (acao) =>
+  (...args) => {
+    if (app.pode.administrar) return acao(...args);
+    aviso('Só administradores podem fazer isso.', 'erro');
+  };
 
 function salvarConfig(parcial, texto = 'Ajuste salvo') {
   gravar(app.loja.salvar('config', 'geral', { ...(app.estado.config.geral || {}), ...parcial }), texto);
@@ -76,33 +92,103 @@ function salvarNomes(form) {
   salvarConfig({ nomes }, 'Nomes salvos');
 }
 
+// ---------- conta e equipe ----------
+
+const ERROS_LOGIN = {
+  'auth/popup-blocked': 'O navegador bloqueou a janela de login. Permita pop-ups para este site e tente de novo.',
+  'auth/operation-not-allowed': 'O login com Google ainda não foi ativado no Firebase.',
+  'auth/unauthorized-domain': 'Este endereço ainda não foi autorizado no Firebase.',
+  'auth/network-request-failed': 'Sem conexão. Tente de novo quando a internet voltar.',
+  'auth/web-storage-unsupported': 'Abra o link no Chrome ou no Safari para entrar: o navegador de dentro do WhatsApp e do Instagram não deixa.',
+};
+
+async function entrar() {
+  try {
+    const { user } = await app.loja.conta.entrar();
+    aviso(`Você entrou como ${user.email}`);
+  } catch (erro) {
+    if (erro?.code === 'auth/popup-closed-by-user' || erro?.code === 'auth/cancelled-popup-request') return;
+    console.error(erro);
+    aviso(ERROS_LOGIN[erro?.code] || `Não deu para entrar: ${erro?.message || 'erro desconhecido'}`, 'erro');
+  }
+}
+
+async function sair() {
+  await app.loja.conta.sair();
+  aviso('Você saiu. O placar continua aberto para consulta.');
+}
+
+function salvarEquipe(admins, editores, texto) {
+  gravar(app.loja.equipe.salvar({ admins: [...admins], editores: [...editores], atualizadoEm: Date.now() }), texto);
+}
+
+function adicionarMembro(form) {
+  const dados = new FormData(form);
+  const email = normalizarEmail(dados.get('email'));
+  const papel = dados.get('papel') === 'admins' ? 'admins' : 'editores';
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    aviso('Digite um e-mail válido.', 'erro');
+    return;
+  }
+  const admins = new Set(app.equipe?.admins || []);
+  const editores = new Set(app.equipe?.editores || []);
+  admins.delete(email);
+  editores.delete(email);
+  (papel === 'admins' ? admins : editores).add(email);
+  salvarEquipe(admins, editores, `${email} entrou na equipe como ${papel === 'admins' ? 'administrador' : 'editor'}`);
+  form.reset();
+}
+
+function removerMembro(el) {
+  const email = el.dataset.email;
+  const admins = new Set(app.equipe?.admins || []);
+  const editores = new Set(app.equipe?.editores || []);
+  admins.delete(email);
+  editores.delete(email);
+  salvarEquipe(admins, editores, `${email} saiu da equipe`);
+}
+
+function destacarNoAparelho(el) {
+  app.ui.nossaLocal = el.value;
+  salvarPreferencias();
+  app.recalcular();
+  app.desenhar();
+  aviso(el.value ? `${app.modelo.nomes[el.value]} destacada neste aparelho` : 'Voltou para a atlética padrão');
+}
+
 export const cliques = {
-  'novo-jogo': (el) => folhaJogo({ mod: el.dataset.mod || '', fase: el.dataset.fase || 'grupo' }),
-  'editar-jogo': (el) => folhaJogo({ id: el.dataset.id }),
-  'editar-grupos': (el) => folhaGrupos(el.dataset.mod),
-  'editar-oficial': (el) => folhaClassificacao(el.dataset.mod),
-  'confirmar-oficial': (el) => confirmarOficial(el.dataset.mod),
-  'remover-oficial': (el) => removerOficial(el.dataset.mod),
-  'editar-prova': (el) => folhaProva(el.dataset.mod, el.dataset.prova),
-  'nova-punicao': (el) => folhaPunicao({ mod: el.dataset.mod || '' }),
-  'editar-punicao': (el) => folhaPunicao({ id: el.dataset.id }),
-  'remarcar-dia': (el) => folhaRemarcar(el.dataset.data),
+  'novo-jogo': soEditor((el) => folhaJogo({ mod: el.dataset.mod || '', fase: el.dataset.fase || 'grupo' })),
+  'editar-jogo': soEditor((el) => folhaJogo({ id: el.dataset.id })),
+  'editar-grupos': soEditor((el) => folhaGrupos(el.dataset.mod)),
+  'editar-oficial': soEditor((el) => folhaClassificacao(el.dataset.mod)),
+  'confirmar-oficial': soEditor((el) => confirmarOficial(el.dataset.mod)),
+  'remover-oficial': soEditor((el) => removerOficial(el.dataset.mod)),
+  'editar-prova': soEditor((el) => folhaProva(el.dataset.mod, el.dataset.prova)),
+  'nova-punicao': soEditor((el) => folhaPunicao({ mod: el.dataset.mod || '' })),
+  'editar-punicao': soEditor((el) => folhaPunicao({ id: el.dataset.id })),
+  'remarcar-dia': soEditor((el) => folhaRemarcar(el.dataset.data)),
+  'apagar-tudo': soAdmin(folhaApagarTudo),
+  'remover-membro': soAdmin(removerMembro),
   'aba-jogos': (el) => mudarTela({ abaJogos: el.dataset.aba }),
   'modo-geral': (el) => mudarTela({ modoGeral: el.dataset.modo }),
   exportar: exportarBackup,
-  'apagar-tudo': folhaApagarTudo,
+  entrar,
+  sair,
   recarregar: () => location.reload(),
 };
 
 export const mudancas = {
-  nossa: (el) =>
-    salvarConfig({ nossa: el.value || null }, el.value ? `${app.modelo.nomes[el.value]} agora é a nossa atlética` : 'Nenhuma atlética destacada'),
+  nossa: soEditor((el) =>
+    salvarConfig({ nossa: el.value || null }, el.value ? `${app.modelo.nomes[el.value]} agora é a atlética padrão` : 'Nenhuma atlética padrão'),
+  ),
+  'nossa-local': destacarNoAparelho,
   'so-nossos': (el) => mudarTela({ soNossos: el.checked }),
   'mod-jogos': (el) => mudarTela({ modJogos: el.value }),
-  'wo-tecnico': (el) => salvarConfig({ woTecnicoPerde12: el.checked }),
-  importar: (el) => lerBackup(el),
+  'wo-tecnico': soEditor((el) => salvarConfig({ woTecnicoPerde12: el.checked })),
+  importar: soAdmin((el) => lerBackup(el)),
 };
 
 export const formularios = {
-  nomes: salvarNomes,
+  nomes: soEditor(salvarNomes),
+  equipe: soAdmin(adicionarMembro),
 };

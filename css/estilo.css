@@ -147,6 +147,25 @@ h3 {
   color: var(--tinta-suave);
 }
 
+.topo-lado {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.conta-avatar {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--bronze);
+  color: var(--sobre-bronze);
+  font-weight: 700;
+  text-decoration: none;
+}
+
 .status {
   display: inline-flex;
   align-items: center;
@@ -604,6 +623,7 @@ ol.painel {
 select,
 input:not([type]),
 input[type='text'],
+input[type='email'],
 input[type='number'],
 input[type='date'],
 input[type='time'] {
@@ -635,12 +655,24 @@ input[type='time'] {
 }
 
 .placar-nos .rotulo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 12px;
   margin: 0;
   color: var(--placar-suave);
   font-size: 0.78rem;
   font-weight: 600;
   letter-spacing: 0.12em;
   text-transform: uppercase;
+}
+
+.placar-trocar {
+  color: var(--placar-bronze);
+  font-size: 0.75rem;
+  letter-spacing: 0.04em;
+  text-transform: none;
 }
 
 .placar-nos-numeros {
@@ -833,8 +865,13 @@ tr.nos .nome a {
   cursor: pointer;
 }
 
-.lista-jogos .jogo:hover {
+.lista-jogos button.jogo:hover {
   background: var(--superficie-2);
+}
+
+/* Para quem só acompanha, o jogo não abre nada. */
+.lista-jogos div.jogo {
+  cursor: default;
 }
 
 .jogo-quando {
@@ -1212,6 +1249,54 @@ button.item-punicao:hover {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(min(100%, 230px), 1fr));
   gap: 12px;
+}
+
+/* ---------- Equipe ---------- */
+
+.lista-equipe {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--linha);
+  border-radius: var(--raio-pequeno);
+  overflow: hidden;
+}
+
+.lista-equipe:empty {
+  display: none;
+}
+
+.item-equipe {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+}
+
+.item-equipe + .item-equipe {
+  border-top: 1px solid var(--linha);
+}
+
+.link-perigo {
+  color: var(--derrota);
+}
+
+.adicionar-membro {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 10px;
+}
+
+@media (max-width: 520px) {
+  .adicionar-membro {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  .adicionar-membro .campo:first-child {
+    grid-column: 1 / -1;
+  }
 }
 
 /* ---------- Folha de edição ---------- */

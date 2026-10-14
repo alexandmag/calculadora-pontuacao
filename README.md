@@ -3,14 +3,17 @@
 App para a atlética acompanhar a pontuação do **INTERPUC Minas 11ª Edição (2026)**: jogos, grupos, provas
 individuais e a classificação geral das 13 atléticas, seguindo o regulamento do campeonato.
 
-- **Sem login.** Quem tem o link abre no celular, vê tudo e lança resultados.
+- **Ver é livre; editar exige login.** Qualquer pessoa com o link acompanha o placar. Lançar resultados exige entrar com uma conta Google da equipe.
 - **Compartilhado e ao vivo.** Um diretor lança o placar na quadra e os outros veem na hora.
+- **Serve para todas as atléticas.** Cada pessoa escolhe no próprio aparelho qual atlética destacar.
 - **Datas soltas.** Jogo pode ficar sem data e um dia inteiro pode ser remarcado de uma vez (chuva).
 - **Projeção a qualquer momento.** A geral mostra quem seria campeã se o campeonato acabasse agora.
 
 ## Como usar
 
-1. **Ajustes** → escolha a sua atlética (fica destacada em todo o app) e, se quiser, troque os nomes das atléticas pelos apelidos que vocês usam.
+1. **Ajustes → Conta** → **Entrar com Google**. No celular, abra o link no Chrome ou no Safari (o navegador de dentro do WhatsApp e do Instagram não deixa entrar com Google).
+   - O dono do placar é sempre administrador. Em **Ajustes → Equipe**, administradores adicionam os e-mails de quem pode editar (**editor**) ou também cuidar da equipe (**administrador**).
+   - Em **Ajustes → Atlética da equipe** fica a atlética destacada para quem abre o link; cada pessoa pode trocar a do próprio aparelho em **Atlética destacada**.
 2. **Modalidades** → numa coletiva, toque em **Montar grupos** e marque o grupo de cada atlética. O app cria todos os jogos de cada grupo.
 3. **Jogos** → toque num jogo para marcar data, hora e local e, depois, lançar o placar. Choveu? **Remarcar dia** move todos os jogos pendentes daquele dia.
 4. Repescagem (onde houver), semifinais e final → **Adicionar jogo** na página da modalidade. Não há oitavas nem quartas.
@@ -60,6 +63,11 @@ O Firebase é o banco gratuito do Google que guarda os dados e entrega ao vivo p
 **Já está configurado:** o app usa o projeto `placar-interpuc` (Firestore em São Paulo, plano gratuito), com as
 regras de [`firestore.rules`](firestore.rules) publicadas. Os passos abaixo só servem para recriar o banco do zero.
 
+Quem pode o quê fica nas regras do Firestore: qualquer um lê; gravar exige estar logado com um e-mail da equipe
+(documento `edicoes/2026/acesso/equipe`, `{ admins: [...], editores: [...] }`). O dono é reconhecido pelo
+SHA-256 do e-mail, que aparece igual em `firestore.rules` e em `js/firebase-config.js` (`donoHash`). Mudou as
+regras? Publique de novo na aba **Regras** do Firestore: não há deploy automático.
+
 1. Acesse <https://console.firebase.google.com> com uma conta Google e crie um projeto (ex.: `placar-interpuc`). O Google Analytics pode ficar desligado.
 2. Menu **Criação → Firestore Database → Criar banco de dados**. Local: `southamerica-east1 (São Paulo)`. Modo: produção.
 3. Na aba **Regras** do Firestore, apague o que estiver lá, cole o conteúdo do arquivo [`firestore.rules`](firestore.rules) e clique em **Publicar**.
@@ -77,10 +85,10 @@ regras de [`firestore.rules`](firestore.rules) publicadas. Os passos abaixo só 
    };
    ```
 
-6. Faça o commit e o push. O topo do app passa a mostrar **Ao vivo**.
+6. Menu **Criação → Authentication → Começar**. Em **Método de login**, ative o **Google**. Em **Configurações → Domínios autorizados**, adicione `alexandmag.github.io`.
+7. Troque o `donoHash` (em `js/firebase-config.js` e em `firestore.rules`) pelo SHA-256 do e-mail do novo dono, faça o commit e o push. O topo do app passa a mostrar **Ao vivo**.
 
-Esses dados do Firebase não são senha: foram feitos para ficar no site. Como não há login, qualquer pessoa com o link
-pode editar. Por isso, compartilhe o link só com a diretoria e faça backups.
+Esses dados do Firebase não são senha: foram feitos para ficar no site. Quem protege os dados são as regras.
 
 ## Desenvolvimento
 
@@ -103,5 +111,6 @@ Roda os testes das regras de pontuação.
 | `js/regras.js` | Regras do regulamento, só cálculo (testadas em `tests/`) |
 | `js/dados.js` | Atléticas, modalidades, formatos dos grupos, provas e dias de jogos |
 | `js/modelo.js` | Junta os dados lançados com as regras e calcula tabelas e classificações |
-| `js/armazenamento.js` | Firebase (compartilhado) ou armazenamento do aparelho (local) |
+| `js/armazenamento.js` | Firebase (compartilhado, com login) ou armazenamento do aparelho (local) |
+| `js/permissoes.js` | Quem pode editar e administrar, a partir do login e da equipe |
 | `js/telas.js`, `js/folhas.js`, `js/acoes.js` | Telas, formulários de lançamento e ações dos botões |

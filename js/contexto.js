@@ -6,7 +6,8 @@ import { esc } from './util.js';
 const PREFERENCIAS = 'placar-interpuc-preferencias';
 
 function lerPreferencias() {
-  const padrao = { soNossos: true, abaJogos: 'abertos', modJogos: '', modoGeral: 'projecao' };
+  // nossaLocal: atlética destacada neste aparelho ('' = a padrão da equipe).
+  const padrao = { soNossos: true, abaJogos: 'abertos', modJogos: '', modoGeral: 'projecao', nossaLocal: '' };
   try {
     return { ...padrao, ...JSON.parse(localStorage.getItem(PREFERENCIAS) || '{}') };
   } catch {
@@ -21,7 +22,13 @@ export const app = {
   ui: lerPreferencias(),
   pendentes: 0,
   erroConexao: null,
+  usuario: null, // { uid, email, nome } de quem entrou com Google
+  equipe: null, // { admins: [e-mails], editores: [e-mails] }
+  dono: false,
+  semAcesso: false,
+  pode: { editar: false, administrar: false, papel: 'visitante' },
   desenhar: () => {},
+  recalcular: () => {},
 };
 
 // Filtros e abas escolhidos ficam lembrados só neste aparelho.
@@ -65,7 +72,7 @@ export function atualizarStatus() {
 }
 
 function explicarErro(erro) {
-  if (erro?.code === 'permission-denied') return 'o banco recusou a gravação. Confira as regras do Firestore (README).';
+  if (erro?.code === 'permission-denied') return 'sua conta não tem permissão para editar. Entre com uma conta da equipe (Ajustes → Conta).';
   if (erro?.code === 'unavailable') return 'sem conexão. A mudança será enviada quando a internet voltar.';
   return erro?.message || 'erro desconhecido.';
 }

@@ -16,6 +16,15 @@ test('modalidade com grupos montados mas sem resultado não dá pontos na proje�
   assert.equal(modelo.modalidades['futsal-m'].participantes, 4, 'a folha de classificação ainda sabe quantas atléticas disputam');
 });
 
+test('cada aparelho pode destacar outra atlética; sem escolha, vale a da equipe', () => {
+  const estado = vazio();
+  estado.config.geral = { nossa: 'eng' };
+  assert.equal(montarModelo(estado).nossa, 'eng');
+  assert.equal(montarModelo(estado, { nossaLocal: 'med' }).nossa, 'med');
+  assert.equal(montarModelo(estado, { nossaLocal: 'med' }).nossaPadrao, 'eng');
+  assert.equal(montarModelo(estado, { nossaLocal: 'nao-existe' }).nossa, 'eng');
+});
+
 test('com o primeiro resultado lançado, a projeção começa a contar', () => {
   const estado = vazio();
   estado.modalidades['futsal-m'] = { grupoDe: { ef: 'A', eng: 'A', med: 'B', dir: 'B' } };

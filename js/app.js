@@ -1,14 +1,18 @@
-// Ponto de entrada: abre o banco, recalcula o modelo a cada mudança e desenha a tela da rota atual.
+// Ponto de entrada: abre o banco, acompanha o login, recalcula o modelo a cada mudança e desenha a
+// tela da rota atual.
 
-import { firebaseConfig } from './firebase-config.js';
+import { donoHash, firebaseConfig } from './firebase-config.js';
 import { criarArmazenamento } from './armazenamento.js';
 import { montarModelo } from './modelo.js';
+import { calcularPermissao, hashEmail } from './permissoes.js';
 import * as telas from './telas.js';
 import { cliques, formularios, mudancas } from './acoes.js';
 import { app, atualizarStatus, aviso, fecharFolha } from './contexto.js';
+import { esc } from './util.js';
 
 const principal = document.getElementById('app');
 const folha = document.getElementById('folha');
+const areaConta = document.getElementById('conta');
 
 // Rota → aba do rodapé que fica acesa.
 const ABA_DA_TELA = { inicio: 'inicio', jogos: 'jogos', modalidades: 'modalidades', m: 'modalidades', geral: 'geral', a: 'geral', ajustes: 'ajustes' };
@@ -30,7 +34,15 @@ function desenhar({ topo = false } = {}) {
   }
   desenhoAdiado = false;
   const { tela, param } = rotaAtual();
-  const ctx = { modelo: app.modelo, ui: app.ui, modo: app.loja.modo };
+  const ctx = {
+    modelo: app.modelo,
+    ui: app.ui,
+    modo: app.loja.modo,
+    pode: app.pode,
+    usuario: app.usuario,
+    equipe: app.equipe,
+    dono: app.dono,
+  };
   const telasPorRota = {
     inicio: () => telas.inicio(ctx),
     jogos: () => telas.jogos(ctx),
@@ -48,6 +60,60 @@ function desenhar({ topo = false } = {}) {
   if (topo) window.scrollTo(0, 0);
 }
 app.desenhar = desenhar;
+
+app.recalcular = () => {
+  if (app.estado) app.modelo = montarModelo(app.estado, { nossaLocal: app.ui.nossaLocal });
+};
+
+// Botão de conta no topo: "Entrar" para quem não entrou; a inicial de quem entrou leva aos Ajustes.
+function desenharConta() {
+  if (!app.loja?.conta) {
+    areaConta.innerHTML = '';
+    return;
+  }
+  if (!app.usuario) {
+    areaConta.innerHTML = '<button type="button" class="botao secundario pequeno" data-acao="entrar">Entrar</button>';
+    return;
+  }
+  const inicial = (app.usuario.nome || app.usuario.email || '?').trim().charAt(0).toUpperCase();
+  areaConta.innerHTML = `<a class="conta-avatar" href="#/ajustes" title="${esc(app.usuario.email)}" aria-label="Sua conta: ${esc(app.usuario.email)}">${esc(inicial)}</a>`;
+}
+
+function atualizarPermissao() {
+  app.pode = calcularPermissao({ modo: app.loja.modo, usuario: app.usuario, equipe: app.equipe, dono: app.dono, semAcesso: app.semAcesso });
+  desenharConta();
+  desenhar();
+}
+
+let pararEquipe = null;
+
+function acompanharConta() {
+  app.loja.conta.ouvir(async (usuario) => {
+    pararEquipe?.();
+    pararEquipe = null;
+    app.usuario = usuario;
+    app.equipe = null;
+    app.semAcesso = false;
+    app.dono = usuario ? (await hashEmail(usuario.email)) === donoHash : false;
+    if (usuario) {
+      // Só a equipe consegue ler a lista; para os outros, o banco responde "sem permissão".
+      pararEquipe = app.loja.equipe.ouvir(
+        (equipe) => {
+          app.equipe = equipe;
+          app.semAcesso = false;
+          atualizarPermissao();
+        },
+        (erro) => {
+          app.equipe = null;
+          app.semAcesso = erro?.code === 'permission-denied';
+          if (!app.semAcesso) console.error(erro);
+          atualizarPermissao();
+        },
+      );
+    }
+    atualizarPermissao();
+  });
+}
 
 function marcarDia(caixa) {
   const valor = caixa.querySelector('input[type="date"]').value;
@@ -108,15 +174,18 @@ async function iniciar() {
     principal.innerHTML = telas.erroConexao(erro);
     return;
   }
+  app.pode = calcularPermissao({ modo: app.loja.modo });
   app.loja.aoFalhar((erro) => {
     app.erroConexao = erro;
     atualizarStatus();
     aviso(`O banco recusou a leitura: ${erro.message}`, 'erro');
   });
   atualizarStatus();
+  desenharConta();
+  if (app.loja.conta) acompanharConta();
   app.loja.ouvir((estado) => {
     app.estado = estado;
-    app.modelo = montarModelo(estado);
+    app.recalcular();
     atualizarStatus();
     desenhar();
   });
