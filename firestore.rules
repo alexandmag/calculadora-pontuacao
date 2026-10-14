@@ -1,0 +1,13 @@
+rules_version = '2';
+
+// Placar INTERPUC: sem login. Quem tem o link lê e edita os dados da edição.
+// As gravações deixam de ser aceitas em 1º/03/2027; depois disso o placar fica só para consulta.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /edicoes/{edicao}/{colecao}/{documento} {
+      allow read: if colecao in ['config', 'modalidades', 'jogos', 'resultados', 'penalidades'];
+      allow write: if colecao in ['config', 'modalidades', 'jogos', 'resultados', 'penalidades']
+        && request.time < timestamp.date(2027, 3, 1);
+    }
+  }
+}

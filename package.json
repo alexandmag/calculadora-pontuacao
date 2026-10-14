@@ -1,0 +1,10 @@
+{
+  "name": "calculadora-pontuacao",
+  "private": true,
+  "description": "Placar da atlética no INTERPUC Minas 11ª Edição (2026)",
+  "type": "module",
+  "scripts": {
+    "dev": "node scripts/servidor.mjs",
+    "test": "node --test"
+  }
+}
