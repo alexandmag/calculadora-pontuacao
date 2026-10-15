@@ -7,7 +7,7 @@ const PREFERENCIAS = 'placar-interpuc-preferencias';
 
 function lerPreferencias() {
   // nossaLocal: atlética destacada neste aparelho ('' = a padrão da equipe).
-  const padrao = { soNossos: true, abaJogos: 'abertos', modJogos: '', modoGeral: 'projecao', nossaLocal: '' };
+  const padrao = { soNossos: true, abaJogos: 'abertos', modJogos: '', modoGeral: 'projecao', nossaLocal: '', formatoResumo: 'imagem' };
   try {
     return { ...padrao, ...JSON.parse(localStorage.getItem(PREFERENCIAS) || '{}') };
   } catch {

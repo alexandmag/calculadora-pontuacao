@@ -2,7 +2,7 @@
 // Nada aqui grava dados: os botões levam data-acao e quem age é o acoes.js.
 // Botões de edição só aparecem para quem pode editar (ctx.pode); quem só acompanha vê o placar.
 
-import { ATLETICAS, FASES, MODALIDADE, MODALIDADES } from './dados.js';
+import { ATLETICAS, FASES, LOGO, MODALIDADE, MODALIDADES } from './dados.js';
 import { ESPORTES, NOME_ETAPA, ORDEM_FASES, placarEfetivo, pontosPorColocacao, vencedor } from './regras.js';
 import { TIPOS_PUNICAO } from './modelo.js';
 import { PAPEIS, normalizarEmail } from './permissoes.js';
@@ -37,11 +37,14 @@ function rotuloFase(j) {
   return j.fase === 'grupo' ? `Grupo ${j.grupo || '?'}` : NOME_FASE[j.fase] || j.fase;
 }
 
-function cabecalho(titulo, sub = '', { voltar = null, acao = '' } = {}) {
+function cabecalho(titulo, sub = '', { voltar = null, acao = '', logo = null } = {}) {
   return `<header class="tela-topo">
       ${voltar ? `<a class="voltar" href="${voltar.href}">‹ ${esc(voltar.texto)}</a>` : ''}
       <div class="tela-topo-linha">
-        <div><h1>${esc(titulo)}</h1>${sub ? `<p class="sub">${sub}</p>` : ''}</div>
+        <div class="tela-titulo">
+          ${logo ? `<img class="escudo escudo-titulo" src="${esc(logo)}" alt="" width="64" height="52">` : ''}
+          <div><h1>${esc(titulo)}</h1>${sub ? `<p class="sub">${sub}</p>` : ''}</div>
+        </div>
         ${acao}
       </div>
     </header>`;
@@ -179,6 +182,7 @@ export function inicio(ctx) {
         <div class="placar-nos-numeros">
           <span class="placar-pos">${posicaoGeral(eu, lista)}</span>
           <span class="placar-pts">${inteiro(eu.total)}<small>pts</small></span>
+          ${LOGO[modelo.nossa] ? `<img class="escudo escudo-placar" src="${esc(LOGO[modelo.nossa])}" alt="" width="96" height="78">` : ''}
         </div>
         <p class="placar-frase">${frasePosicao(ctx, lista, eu)}</p>
         <dl class="placar-extra">
@@ -201,7 +205,7 @@ export function inicio(ctx) {
     ${
       modelo.nossa && ultimos.length
         ? secao('Últimos resultados', listaJogos(ctx, ultimos, { data: true }), {
-            acao: seEditar(ctx, `<button type="button" class="link" data-acao="resumo-dia" data-data="${esc(ultimos[0].data || '')}">Resumo em PDF</button>`),
+            acao: seEditar(ctx, `<button type="button" class="link" data-acao="resumo-dia" data-data="${esc(ultimos[0].data || '')}">Resumo do dia</button>`),
           })
         : ''
     }`;
@@ -256,7 +260,7 @@ export function jogos(ctx) {
   } else {
     conteudo = [...porDia.entries()]
       .map(([dia, lista]) => {
-        const resumo = dia ? seEditar(ctx, `<button type="button" class="link" data-acao="resumo-dia" data-data="${dia}">Resumo em PDF</button>`) : '';
+        const resumo = dia ? seEditar(ctx, `<button type="button" class="link" data-acao="resumo-dia" data-data="${dia}">Resumo</button>`) : '';
         const remarcar =
           aba === 'abertos' && dia ? seEditar(ctx, `<button type="button" class="link" data-acao="remarcar-dia" data-data="${dia}">Remarcar dia</button>`) : '';
         return secao(dataLonga(dia), listaJogos(ctx, lista), { acao: resumo || remarcar ? `<span class="links-secao">${resumo}${remarcar}</span>` : '' });
@@ -265,7 +269,7 @@ export function jogos(ctx) {
   }
 
   const sub = ctx.pode.editar ? 'Datas mudam? Edite o jogo ou remarque o dia inteiro.' : 'Horários e locais do tabelamento da CO.';
-  // Resumo em PDF e novo jogo: só para quem entrou com uma conta da equipe.
+  // Resumo do dia (imagem ou PDF) e novo jogo: só para quem entrou com uma conta da equipe.
   return `${cabecalho('Jogos', sub, {
     acao: seEditar(
       ctx,
@@ -620,7 +624,7 @@ export function atletica(ctx, id) {
   const perdas = proj.ajustes
     .map((p) => `<li class="item-punicao"><span class="nome">${esc(p.motivo)}</span><span class="valor">${comSinal(p.pontos)}</span></li>`)
     .join('');
-  return `${cabecalho(ctx.modelo.nomes[id], esc(a.nome), { voltar: { href: '#/geral', texto: 'Classificação geral' } })}
+  return `${cabecalho(ctx.modelo.nomes[id], esc(a.nome), { voltar: { href: '#/geral', texto: 'Classificação geral' }, logo: LOGO[id] })}
     <dl class="numeros">
       <div><dt>Projeção</dt><dd>${posicaoGeral(proj, ctx.modelo.geral.projecao)} <small>${pts(proj.total)}</small></dd></div>
       <div><dt>Só oficiais</dt><dd>${posicaoGeral(ofic, ctx.modelo.geral.oficial)} <small>${pts(ofic.total)}</small></dd></div>
@@ -661,9 +665,13 @@ function blocoConta(ctx) {
 
 function blocoDestaque(ctx) {
   const padrao = ctx.modelo.nossaPadrao ? `Padrão: ${ctx.modelo.nomes[ctx.modelo.nossaPadrao]}` : 'Nenhuma';
+  const nossa = ctx.modelo.nossa;
+  const escudo = nossa && LOGO[nossa]
+    ? `<div class="destaque-escudo"><img class="escudo escudo-mini" src="${esc(LOGO[nossa])}" alt="" width="56" height="46"><span>${nome(ctx, nossa)}</span></div>`
+    : '';
   return secao(
     'Atlética destacada',
-    `<label class="campo"><span>Neste aparelho</span>
+    `${escudo}<label class="campo"><span>Neste aparelho</span>
       <select id="ajuste-nossa-local" data-mudar="nossa-local">${opcoesAtleticasHTML(ctx, ctx.ui.nossaLocal || '', padrao)}</select>
     </label>
     <p class="nota">Vale só para este celular ou computador: é a atlética em destaque e a do filtro “só nossos jogos”. Quem torce para outra atlética pode escolher a sua.</p>`,

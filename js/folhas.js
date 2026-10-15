@@ -3,18 +3,21 @@
 import { ATLETICAS, DIAS_DE_JOGOS, FASES, LETRAS_GRUPO, MODALIDADE, MODALIDADES } from './dados.js';
 import { ESPORTES, pontosPorColocacao } from './regras.js';
 import { TIPOS_PUNICAO, chaveResultado, gruposDaModalidade } from './modelo.js';
-import { app, abrirFolha, aviso, gravar } from './contexto.js';
+import { app, abrirFolha, aviso, gravar, salvarPreferencias } from './contexto.js';
 import {
   baixarArquivo,
+  carregarImagem,
   carregarJsPDF,
   compartilharArquivo,
   dadosDoResumo,
   diaPadrao,
   diasComJogos,
+  escudoParaPdf,
   gerarPdf,
   nomeDoArquivo,
   podeCompartilharArquivo,
 } from './resumo.js';
+import { gerarImagem } from './resumo-imagem.js';
 import { estadoVazio } from './armazenamento.js';
 import { temResultado } from './telas.js';
 import { dataCurta, dataLonga, esc, novoId, numero } from './util.js';
@@ -538,7 +541,7 @@ export function folhaRemarcar(data) {
   });
 }
 
-// ---------- Resumo do dia em PDF ----------
+// ---------- Resumo do dia (imagem ou PDF) ----------
 
 function opcoesDosDias(at, escolhido) {
   const dias = at ? diasComJogos(app.modelo, at) : [];
@@ -554,54 +557,90 @@ function previaDoResumo(at, dia) {
   return `${totais.jogos} ${totais.jogos === 1 ? 'jogo' : 'jogos'} nesse dia, ${lancados} com resultado lançado.`;
 }
 
+// Imagem PNG (aparece direto na conversa do WhatsApp) ou PDF (bom para guardar ou imprimir).
+async function arquivoDoResumo(resumo, formato) {
+  const logo = await carregarImagem(resumo.logo);
+  if (formato === 'pdf') {
+    const JsPDF = await carregarJsPDF();
+    return { blob: gerarPdf(JsPDF, resumo, { logo: logo ? escudoParaPdf(logo) : null }).output('blob'), extensao: 'pdf' };
+  }
+  return { blob: await gerarImagem(resumo, { logo }), extensao: 'png' };
+}
+
 export function folhaResumo({ dia = '' } = {}) {
   const at = app.modelo.nossa || '';
   const compartilhar = podeCompartilharArquivo();
+  const formato = app.ui.formatoResumo === 'pdf' ? 'pdf' : 'imagem';
+  const opcaoFormato = (valor, rotulo) =>
+    `<label class="opcao-formato"><input type="radio" name="formato" value="${valor}"${valor === formato ? ' checked' : ''}><span>${rotulo}</span></label>`;
   const corpo = `<label class="campo"><span>Atlética</span><select name="at" id="resumo-atletica">${opcoesAtleticas(at, 'Escolha…')}</select></label>
     <label class="campo"><span>Dia</span><select name="dia" id="resumo-dia">${opcoesDosDias(at, dia)}</select></label>
+    <div class="campo"><span>Formato</span>
+      <div class="opcoes-formato" role="radiogroup" aria-label="Formato">${opcaoFormato('imagem', 'Imagem')}${opcaoFormato('pdf', 'PDF')}</div>
+    </div>
     <p class="nota" data-previa></p>
-    <p class="nota">O PDF traz os jogos do dia com placar, parciais, observações e a situação no grupo, além da posição na geral.${compartilhar ? ' Em “Compartilhar” dá para mandar direto no grupo dos atletas.' : ''}</p>`;
+    <p class="nota">Traz o escudo, a posição na geral e os jogos do dia com placar, parciais, situação no grupo e observações. A imagem aparece direto na conversa do WhatsApp; o PDF é melhor para guardar ou imprimir.</p>`;
   const rodape = compartilhar
     ? '<span class="espaco"></span><button type="submit" class="botao secundario" value="baixar">Baixar</button><button type="submit" class="botao" value="compartilhar">Compartilhar</button>'
-    : '<span class="espaco"></span><button type="submit" class="botao" value="baixar">Baixar PDF</button>';
+    : '<span class="espaco"></span><button type="submit" class="botao" value="baixar">Baixar</button>';
+
+  // O celular só abre o "compartilhar" se o arquivo sair no mesmo toque. Por isso ele é preparado antes:
+  // quando a folha abre e a cada mudança de atlética, dia ou formato.
+  let preparado = null; // { chave, estado, promessa, arquivo }
+  const preparar = (form) => {
+    const chave = [form.elements.at.value, form.elements.dia.value, form.elements.formato.value].join('|');
+    if (preparado?.chave === chave && preparado.estado === app.estado) return preparado;
+    const [atEscolhida, diaEscolhido, formatoEscolhido] = chave.split('|');
+    if (!atEscolhida || !diaEscolhido) return (preparado = null);
+    const resumo = dadosDoResumo(app.modelo, atEscolhida, diaEscolhido);
+    const atual = { chave, estado: app.estado, arquivo: null };
+    atual.promessa = arquivoDoResumo(resumo, formatoEscolhido).then((arquivo) => (atual.arquivo = { ...arquivo, resumo }));
+    atual.promessa.catch(() => {});
+    preparado = atual;
+    return atual;
+  };
+  const entregar = ({ blob, extensao, resumo }, acao) => {
+    const nome = nomeDoArquivo(resumo, extensao);
+    if (acao === 'compartilhar') return compartilharArquivo(blob, nome, `Resumo do dia · ${resumo.atletica}`);
+    baixarArquivo(blob, nome);
+    return Promise.resolve('baixado');
+  };
 
   abrirFolha({
-    titulo: 'Resumo do dia em PDF',
+    titulo: 'Resumo do dia',
     corpo,
     rodape,
     aoAbrir: (form) => {
-      carregarJsPDF().catch(() => {}); // adianta o download para o compartilhar sair na hora
       const atualizar = () => {
         form.querySelector('[data-previa]').textContent = previaDoResumo(form.elements.at.value, form.elements.dia.value);
+        preparar(form);
       };
       form.elements.at.addEventListener('change', () => {
         form.elements.dia.innerHTML = opcoesDosDias(form.elements.at.value, form.elements.dia.value);
         atualizar();
       });
       form.elements.dia.addEventListener('change', atualizar);
+      for (const opcao of form.querySelectorAll('[name="formato"]')) {
+        opcao.addEventListener('change', () => {
+          app.ui.formatoResumo = form.elements.formato.value;
+          salvarPreferencias();
+          atualizar();
+        });
+      }
       atualizar();
     },
     aoEnviar: (dados, form, acao) => {
-      const atEscolhida = dados.get('at');
-      const diaEscolhido = dados.get('dia');
-      if (!atEscolhida) return 'Escolha a atlética.';
-      if (!diaEscolhido) return 'Essa atlética ainda não tem jogos com data marcada.';
-      const resumo = dadosDoResumo(app.modelo, atEscolhida, diaEscolhido);
-      const gerar = (JsPDF) => {
-        const blob = gerarPdf(JsPDF, resumo).output('blob');
-        const arquivo = nomeDoArquivo(resumo);
-        if (acao === 'compartilhar') return compartilharArquivo(blob, arquivo, `Resumo do dia · ${resumo.atletica}`);
-        baixarArquivo(blob, arquivo);
-        return Promise.resolve('baixado');
+      if (!dados.get('at')) return 'Escolha a atlética.';
+      if (!dados.get('dia')) return 'Essa atlética ainda não tem jogos com data marcada.';
+      const pronto = preparar(form);
+      const avisar = (r) => {
+        if (r === 'baixado') aviso('Arquivo baixado');
+        if (r === 'compartilhado') aviso('Resumo compartilhado');
       };
-      // Com o gerador já carregado, o PDF sai no mesmo toque (o celular só abre o compartilhar assim).
-      const pronto = globalThis.jspdf?.jsPDF;
-      (pronto ? gerar(pronto) : carregarJsPDF().then(gerar))
-        .then((r) => {
-          if (r === 'baixado') aviso('PDF baixado');
-          if (r === 'compartilhado') aviso('Resumo compartilhado');
-        })
-        .catch((erro) => aviso(erro?.message || 'Não deu para gerar o PDF.', 'erro'));
+      const falhou = (erro) => aviso(erro?.message || 'Não deu para gerar o resumo.', 'erro');
+      // Arquivo já pronto: sai no mesmo toque. Senão espera; se o celular recusar o compartilhar, baixa.
+      if (pronto.arquivo) entregar(pronto.arquivo, acao).then(avisar).catch(falhou);
+      else pronto.promessa.then((arquivo) => entregar(arquivo, acao)).then(avisar).catch(falhou);
     },
   });
 }

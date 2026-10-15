@@ -1,8 +1,9 @@
-// Resumo do dia de uma atlética em PDF, para mandar no grupo dos atletas: os jogos do dia com placar,
-// parciais, observações e a situação no grupo, mais a posição na geral.
-// dadosDoResumo é cálculo puro (testado); gerarPdf desenha com o jsPDF, carregado só quando precisa.
+// Resumo do dia de uma atlética (PDF ou imagem), para mandar no grupo dos atletas: os jogos do dia com
+// placar, parciais, observações e a situação no grupo, mais a posição na geral e o escudo da atlética.
+// dadosDoResumo é cálculo puro (testado); gerarPdf desenha com o jsPDF, carregado só quando precisa;
+// a imagem fica em resumo-imagem.js.
 
-import { FASES, MODALIDADE, MODALIDADES } from './dados.js';
+import { FASES, LOGO, MODALIDADE, MODALIDADES } from './dados.js';
 import { ESPORTES, placarEfetivo, vencedor } from './regras.js';
 import { dataLonga, hojeISO, pad } from './util.js';
 
@@ -75,7 +76,9 @@ export function dadosDoResumo(modelo, at, dia) {
   const temResultados = modelo.geral.projecao.some((l) => l.detalhe.length || l.ajustes.length);
   const geral = modelo.geral.projecao.find((l) => l.id === at);
   return {
+    id: at,
     atletica: nome(at),
+    logo: LOGO[at] || null,
     dia,
     diaTexto: dataLonga(dia),
     itens,
@@ -102,14 +105,50 @@ export function textoParaPdf(texto) {
     .replace(/[ \t]{2,}/g, ' ');
 }
 
-export function nomeDoArquivo(resumo) {
+export function nomeDoArquivo(resumo, extensao = 'pdf') {
   const slug = resumo.atletica
     .normalize('NFD')
     .replace(/[̀-ͯ]/g, '')
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-|-$/g, '');
-  return `resumo-${slug || 'atletica'}-${resumo.dia}.pdf`;
+  return `resumo-${slug || 'atletica'}-${resumo.dia}.${extensao}`;
+}
+
+// ---------- escudo da atlética ----------
+
+const imagens = new Map();
+
+// Carrega uma imagem do site (o escudo); resolve null se não existir ou falhar.
+export function carregarImagem(src) {
+  if (!src) return Promise.resolve(null);
+  if (!imagens.has(src)) {
+    imagens.set(
+      src,
+      new Promise((ok) => {
+        const img = new Image();
+        img.onload = () => ok(img);
+        img.onerror = () => ok(null);
+        img.src = src;
+      }),
+    );
+  }
+  return imagens.get(src);
+}
+
+// O PDF só aceita PNG ou JPEG: o escudo (WebP) vira JPEG sobre branco, a cor do quadro onde ele fica,
+// já no tamanho de uso. PNG com transparência entraria sem compressão e deixaria o PDF pesado.
+export function escudoParaPdf(img, maiorLado = 360) {
+  const escala = Math.min(1, maiorLado / Math.max(img.naturalWidth, img.naturalHeight));
+  const tela = document.createElement('canvas');
+  tela.width = Math.round(img.naturalWidth * escala);
+  tela.height = Math.round(img.naturalHeight * escala);
+  const ctx = tela.getContext('2d');
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, tela.width, tela.height);
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(img, 0, 0, tela.width, tela.height);
+  return { dados: tela.toDataURL('image/jpeg', 0.92), largura: tela.width, altura: tela.height };
 }
 
 // ---------- PDF ----------
@@ -132,7 +171,7 @@ export function carregarJsPDF() {
   return carregando;
 }
 
-const COR = {
+export const COR = {
   tinta: [21, 24, 28],
   suave: [91, 99, 110],
   linha: [218, 222, 228],
@@ -147,7 +186,7 @@ const COR = {
   empate: [91, 99, 110],
 };
 
-const ROTULO = {
+export const ROTULO = {
   vitoria: ['VITÓRIA', COR.vitoria],
   empate: ['EMPATE', COR.empate],
   derrota: ['DERROTA', COR.derrota],
@@ -156,7 +195,7 @@ const ROTULO = {
   pendente: ['A JOGAR', COR.bronzeEscuro],
 };
 
-function detalhesDoJogo(item) {
+export function detalhesDoJogo(item) {
   const linhas = [];
   if (item.resultado === 'pendente') linhas.push('Resultado ainda não lançado.');
   if (item.resultado === 'wo-favor') linhas.push(`${item.adversario} não compareceu.`);
@@ -169,11 +208,16 @@ function detalhesDoJogo(item) {
   return linhas;
 }
 
-function quando(data) {
+export function quando(data) {
   return `${pad(data.getDate())}/${pad(data.getMonth() + 1)}/${data.getFullYear()} às ${pad(data.getHours())}:${pad(data.getMinutes())}`;
 }
 
-export function gerarPdf(JsPDF, resumo, { geradoEm = new Date() } = {}) {
+export function linhaDaGeral(geral) {
+  return geral ? `${geral.posicao}º lugar na geral (projeção) · ${geral.total} ${Math.abs(geral.total) === 1 ? 'ponto' : 'pontos'}` : '';
+}
+
+// logo: { dados, largura, altura } vindo de escudoParaPdf, ou null.
+export function gerarPdf(JsPDF, resumo, { geradoEm = new Date(), logo = null } = {}) {
   const doc = new JsPDF({ unit: 'mm', format: 'a4' });
   const LARGURA = 210;
   const ALTURA = 297;
@@ -186,26 +230,35 @@ export function gerarPdf(JsPDF, resumo, { geradoEm = new Date() } = {}) {
     doc.setTextColor(...cor);
   };
 
-  // Faixa de placar no topo, com a posição na geral à direita.
+  // Faixa de placar no topo: atlética, dia e posição na geral; o escudo fica num quadro branco à direita.
+  const ALTURA_TOPO = 48;
   doc.setFillColor(...COR.placar);
-  doc.rect(0, 0, LARGURA, 44, 'F');
+  doc.rect(0, 0, LARGURA, ALTURA_TOPO, 'F');
   fonte('bold', 8.5, COR.bronze);
-  doc.text('INTERPUC MINAS 2026  ·  RESUMO DO DIA', M, 13);
+  doc.text('INTERPUC MINAS 2026  ·  RESUMO DO DIA', M, 12);
   fonte('bold', 24, [255, 255, 255]);
-  doc.text(t(resumo.atletica), M, 26);
+  doc.text(t(resumo.atletica), M, 24);
   fonte('normal', 12, COR.placarTexto);
-  doc.text(t(resumo.diaTexto), M, 35);
+  doc.text(t(resumo.diaTexto), M, 32);
   if (resumo.geral) {
-    fonte('bold', 8.5, COR.bronze);
-    doc.text('GERAL (PROJEÇÃO)', LARGURA - M, 13, { align: 'right' });
-    fonte('bold', 22, [255, 255, 255]);
-    doc.text(`${resumo.geral.posicao}º`, LARGURA - M, 26, { align: 'right' });
-    fonte('normal', 12, COR.placarTexto);
-    doc.text(t(`${resumo.geral.total} ${Math.abs(resumo.geral.total) === 1 ? 'ponto' : 'pontos'}`), LARGURA - M, 35, { align: 'right' });
+    fonte('bold', 11, COR.bronze);
+    doc.text(t(linhaDaGeral(resumo.geral)), M, 40.5);
+  }
+  if (logo) {
+    const lado = 36;
+    const x = LARGURA - M - lado;
+    const yQuadro = (ALTURA_TOPO - lado) / 2;
+    doc.setFillColor(255, 255, 255);
+    doc.roundedRect(x, yQuadro, lado, lado, 3, 3, 'F');
+    const folga = 3;
+    const escala = Math.min((lado - 2 * folga) / logo.largura, (lado - 2 * folga) / logo.altura);
+    const w = logo.largura * escala;
+    const h = logo.altura * escala;
+    doc.addImage(logo.dados, 'JPEG', x + (lado - w) / 2, yQuadro + (lado - h) / 2, w, h);
   }
 
   // Números do dia.
-  let y = 52;
+  let y = ALTURA_TOPO + 8;
   const { totais } = resumo;
   const caixas = [
     ['Jogos', totais.jogos],
@@ -297,8 +350,9 @@ export function gerarPdf(JsPDF, resumo, { geradoEm = new Date() } = {}) {
 // No celular abre a folha de compartilhar (WhatsApp, Telegram...); no computador, baixa o arquivo.
 export function podeCompartilharArquivo() {
   try {
-    const teste = new File([new Blob(['%PDF'])], 'teste.pdf', { type: 'application/pdf' });
-    return Boolean(navigator.canShare?.({ files: [teste] }));
+    const pdf = new File([new Blob(['%PDF'])], 'teste.pdf', { type: 'application/pdf' });
+    const png = new File([new Blob(['png'])], 'teste.png', { type: 'image/png' });
+    return Boolean(navigator.canShare?.({ files: [pdf] }) && navigator.canShare?.({ files: [png] }));
   } catch {
     return false;
   }
@@ -316,7 +370,7 @@ export function baixarArquivo(blob, nomeArquivo) {
 }
 
 export async function compartilharArquivo(blob, nomeArquivo, titulo) {
-  const arquivo = new File([blob], nomeArquivo, { type: 'application/pdf' });
+  const arquivo = new File([blob], nomeArquivo, { type: blob.type || 'application/octet-stream' });
   try {
     await navigator.share({ files: [arquivo], title: titulo });
     return 'compartilhado';

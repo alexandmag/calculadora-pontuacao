@@ -72,7 +72,13 @@ test('texto do PDF: mantém acentos, troca sinais que a fonte não tem e tira em
   assert.equal(textoParaPdf('1º lugar · Grupo ç'), '1º lugar · Grupo ç');
 });
 
-test('nome do arquivo sem acentos nem espaços', () => {
+test('nome do arquivo sem acentos nem espaços, em PDF ou imagem', () => {
   assert.equal(nomeDoArquivo({ atletica: 'Vikings ICS', dia: DIA }), 'resumo-vikings-ics-2026-10-17.pdf');
-  assert.equal(nomeDoArquivo({ atletica: 'Veterinária', dia: DIA }), 'resumo-veterinaria-2026-10-17.pdf');
+  assert.equal(nomeDoArquivo({ atletica: 'Veterinária', dia: DIA }, 'png'), 'resumo-veterinaria-2026-10-17.png');
+});
+
+test('o resumo leva o escudo da atlética, quando ela tem um', () => {
+  const modelo = montarModelo(estadoDeTeste());
+  assert.equal(dadosDoResumo(modelo, 'eng', DIA).logo, 'img/atleticas/eng.webp');
+  assert.equal(dadosDoResumo(modelo, 'psi', DIA).logo, null);
 });

@@ -16,13 +16,20 @@ individuais e a classificação geral das 13 atléticas, seguindo o regulamento 
    - Em **Ajustes → Atlética da equipe** fica a atlética destacada para quem abre o link; cada pessoa pode trocar a do próprio aparelho em **Atlética destacada**.
 2. **Modalidades** → numa coletiva, toque em **Montar grupos** e marque o grupo de cada atlética. O app cria todos os jogos de cada grupo.
 3. **Jogos** → toque num jogo para marcar data, hora e local e, depois, lançar o placar e uma observação (destaques, recados). Choveu? **Remarcar dia** move todos os jogos pendentes daquele dia.
-   - **Resumo do dia** (só para a equipe): gera um PDF com os jogos da atlética naquele dia (placar, parciais, situação no grupo, observações e posição na geral). No celular, **Compartilhar** manda direto para o grupo dos atletas.
+   - **Resumo do dia** (só para a equipe): gera uma **imagem** ou um **PDF** com o escudo e os jogos da atlética naquele dia (placar, parciais, situação no grupo, observações e posição na geral). A imagem aparece direto na conversa do WhatsApp; o PDF é melhor para guardar ou imprimir. No celular, **Compartilhar** manda direto para o grupo dos atletas.
 4. Repescagem (onde houver), semifinais e final → **Adicionar jogo** na página da modalidade. Não há oitavas nem quartas.
 5. Atletismo, natação, tênis, judô e jiu-jitsu → lance quem ficou do 1º ao 8º em cada prova, chave ou categoria.
 6. Quando a CO divulgar a classificação final de uma modalidade, **Confirme como oficial** (ou lance à mão).
 7. **Geral** → *Projeção* soma tudo o que já foi lançado; *Só oficiais* conta apenas as classificações confirmadas.
 
 Faça um backup em **Ajustes → Baixar backup** no fim de cada dia de jogos.
+
+### Escudos das atléticas
+
+O escudo da atlética destacada aparece no placar do Início, na página dela, em Ajustes e no resumo do dia.
+Hoje só a Engenharia tem escudo. Para incluir outro: salve a imagem em `img/atleticas/<id>.webp` (fundo
+transparente, uns 480 px de largura) e coloque `logo: 'img/atleticas/<id>.webp'` na atlética, em
+[`js/dados.js`](js/dados.js). Sem escudo, o app e o resumo mostram só o nome.
 
 ## Regras usadas
 
@@ -115,5 +122,7 @@ Roda os testes das regras de pontuação.
 | `js/modelo.js` | Junta os dados lançados com as regras e calcula tabelas e classificações |
 | `js/armazenamento.js` | Firebase (compartilhado, com login) ou armazenamento do aparelho (local) |
 | `js/permissoes.js` | Quem pode editar e administrar, a partir do login e da equipe |
-| `js/resumo.js` | Resumo do dia em PDF (o gerador, jsPDF, só é baixado quando alguém abre o resumo) |
+| `js/resumo.js` | Dados do resumo do dia e o PDF (o gerador, jsPDF, só é baixado quando alguém pede um PDF) |
+| `js/resumo-imagem.js` | Resumo do dia em imagem PNG, desenhada no navegador |
+| `img/atleticas/` | Escudos das atléticas |
 | `js/telas.js`, `js/folhas.js`, `js/acoes.js` | Telas, formulários de lançamento e ações dos botões |

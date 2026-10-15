@@ -1,10 +1,10 @@
 // Dados fixos do INTERPUC Minas 11ª Edição (2026): atléticas, modalidades, provas e dias de jogos.
 // Os nomes curtos das atléticas podem ser trocados no app (Ajustes); estes são só o ponto de partida.
 
-// RG Art. 10.
+// RG Art. 10. "logo" aponta para o escudo em img/atleticas (fundo transparente, ~480 px de largura).
 export const ATLETICAS = [
   { id: 'ef', curto: 'Ed. Física', nome: 'Educação Física, Fisioterapia e Biomedicina' },
-  { id: 'eng', curto: 'Engenharia', nome: 'Engenharia e Arquitetura' },
+  { id: 'eng', curto: 'Engenharia', nome: 'Engenharia e Arquitetura', logo: 'img/atleticas/eng.webp' },
   { id: 'psi', curto: 'Psicologia', nome: 'Psicologia' },
   { id: 'med', curto: 'Medicina', nome: 'Medicina' },
   { id: 'vet', curto: 'Veterinária', nome: 'Medicina Veterinária' },
@@ -17,6 +17,8 @@ export const ATLETICAS = [
   { id: 'icei', curto: 'ICEI', nome: 'Instituto de Ciências Exatas e Informática' },
   { id: 'ich', curto: 'ICH', nome: 'Instituto de Ciências Humanas' },
 ];
+
+export const LOGO = Object.fromEntries(ATLETICAS.filter((a) => a.logo).map((a) => [a.id, a.logo]));
 
 export const LETRAS_GRUPO = ['A', 'B', 'C', 'D'];
 

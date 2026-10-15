@@ -23,6 +23,7 @@
   --placar-suave: #b3ab9f;
   --placar-bronze: #e0ab62;
   --placar-linha: #34312c;
+  --escudo-fundo: #ffffff; /* escudos são feitos para fundo claro: ficam num quadro branco nos dois temas */
   --sombra: 0 1px 2px rgb(16 20 24 / 6%), 0 4px 16px rgb(16 20 24 / 5%);
   --fonte-marca: 'Cinzel', Georgia, 'Times New Roman', serif;
   --fonte-texto: 'Barlow', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
@@ -661,6 +662,8 @@ textarea {
 /* ---------- Início ---------- */
 
 .placar-nos {
+  /* Números e escudo acompanham a largura do cartão (cqi), para caberem lado a lado no celular. */
+  container-type: inline-size;
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -695,8 +698,10 @@ textarea {
 
 .placar-nos-numeros {
   display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
-  gap: 20px;
+  gap: 10px 20px;
+  gap: 10px clamp(10px, 4cqi, 20px);
   font-family: var(--fonte-numero);
   font-variant-numeric: tabular-nums;
   line-height: 1;
@@ -705,11 +710,13 @@ textarea {
 .placar-pos {
   color: var(--placar-bronze);
   font-size: 4.6rem;
+  font-size: clamp(3.2rem, 22cqi, 4.6rem);
   font-weight: 700;
 }
 
 .placar-pts {
   font-size: 2.7rem;
+  font-size: clamp(2rem, 13cqi, 2.7rem);
   font-weight: 600;
 }
 
@@ -758,6 +765,90 @@ textarea {
   gap: 10px;
   padding: 18px;
   border-color: var(--bronze);
+}
+
+/* ---------- Escudo da atlética ---------- */
+
+.escudo {
+  display: block;
+  flex-shrink: 0;
+  background: var(--escudo-fundo);
+  object-fit: contain;
+}
+
+.escudo-placar {
+  align-self: center;
+  width: 96px;
+  width: clamp(56px, 24cqi, 96px);
+  height: auto;
+  aspect-ratio: 96 / 78;
+  margin-left: auto;
+  padding: 6px;
+  border-radius: 14px;
+}
+
+.escudo-titulo {
+  width: 64px;
+  height: 52px;
+  padding: 5px;
+  border: 1px solid var(--linha);
+  border-radius: 12px;
+}
+
+.escudo-mini {
+  width: 56px;
+  height: 46px;
+  padding: 4px;
+  border: 1px solid var(--linha);
+  border-radius: 10px;
+}
+
+.tela-titulo {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+
+.destaque-escudo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-weight: 700;
+}
+
+.opcoes-formato {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.opcao-formato input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.opcao-formato span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
+  padding: 0 18px;
+  border: 1px solid var(--linha);
+  border-radius: 999px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.opcao-formato input:checked + span {
+  border-color: var(--bronze);
+  background: var(--bronze);
+  color: var(--sobre-bronze);
+}
+
+.opcao-formato input:focus-visible + span {
+  outline: 2px solid var(--bronze);
+  outline-offset: 2px;
 }
 
 .convite h2 {
