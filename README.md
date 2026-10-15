@@ -15,7 +15,8 @@ individuais e a classificação geral das 13 atléticas, seguindo o regulamento 
    - O dono do placar é sempre administrador. Em **Ajustes → Equipe**, administradores adicionam os e-mails de quem pode editar (**editor**) ou também cuidar da equipe (**administrador**).
    - Em **Ajustes → Atlética da equipe** fica a atlética destacada para quem abre o link; cada pessoa pode trocar a do próprio aparelho em **Atlética destacada**.
 2. **Modalidades** → numa coletiva, toque em **Montar grupos** e marque o grupo de cada atlética. O app cria todos os jogos de cada grupo.
-3. **Jogos** → toque num jogo para marcar data, hora e local e, depois, lançar o placar. Choveu? **Remarcar dia** move todos os jogos pendentes daquele dia.
+3. **Jogos** → toque num jogo para marcar data, hora e local e, depois, lançar o placar e uma observação (destaques, recados). Choveu? **Remarcar dia** move todos os jogos pendentes daquele dia.
+   - **Resumo do dia** (só para a equipe): gera um PDF com os jogos da atlética naquele dia (placar, parciais, situação no grupo, observações e posição na geral). No celular, **Compartilhar** manda direto para o grupo dos atletas.
 4. Repescagem (onde houver), semifinais e final → **Adicionar jogo** na página da modalidade. Não há oitavas nem quartas.
 5. Atletismo, natação, tênis, judô e jiu-jitsu → lance quem ficou do 1º ao 8º em cada prova, chave ou categoria.
 6. Quando a CO divulgar a classificação final de uma modalidade, **Confirme como oficial** (ou lance à mão).
@@ -98,7 +99,8 @@ Precisa só do Node.js (sem dependências para instalar).
 npm run dev
 ```
 
-Abre o app em <http://localhost:5173>.
+Abre o app em <http://localhost:5173>. Com `?local` no endereço (<http://localhost:5173/?local>), o app roda em
+modo de teste: sem login, com os dados só no navegador, sem tocar no banco de verdade.
 
 ```bash
 npm test
@@ -113,4 +115,5 @@ Roda os testes das regras de pontuação.
 | `js/modelo.js` | Junta os dados lançados com as regras e calcula tabelas e classificações |
 | `js/armazenamento.js` | Firebase (compartilhado, com login) ou armazenamento do aparelho (local) |
 | `js/permissoes.js` | Quem pode editar e administrar, a partir do login e da equipe |
+| `js/resumo.js` | Resumo do dia em PDF (o gerador, jsPDF, só é baixado quando alguém abre o resumo) |
 | `js/telas.js`, `js/folhas.js`, `js/acoes.js` | Telas, formulários de lançamento e ações dos botões |

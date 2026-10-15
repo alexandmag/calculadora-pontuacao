@@ -12,6 +12,7 @@ import {
   folhaPunicao,
   folhaRemarcar,
   folhaRestaurar,
+  folhaResumo,
 } from './folhas.js';
 import { normalizarEmail } from './permissoes.js';
 import { hojeISO } from './util.js';
@@ -169,6 +170,8 @@ export const cliques = {
   'remarcar-dia': soEditor((el) => folhaRemarcar(el.dataset.data)),
   'apagar-tudo': soAdmin(folhaApagarTudo),
   'remover-membro': soAdmin(removerMembro),
+  // Só a equipe exporta; os atletas recebem o PDF pela diretoria.
+  'resumo-dia': soEditor((el) => folhaResumo({ dia: el.dataset.data || '' })),
   'aba-jogos': (el) => mudarTela({ abaJogos: el.dataset.aba }),
   'modo-geral': (el) => mudarTela({ modoGeral: el.dataset.modo }),
   exportar: exportarBackup,

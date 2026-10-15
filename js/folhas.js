@@ -3,12 +3,24 @@
 import { ATLETICAS, DIAS_DE_JOGOS, FASES, LETRAS_GRUPO, MODALIDADE, MODALIDADES } from './dados.js';
 import { ESPORTES, pontosPorColocacao } from './regras.js';
 import { TIPOS_PUNICAO, chaveResultado, gruposDaModalidade } from './modelo.js';
-import { app, abrirFolha, gravar } from './contexto.js';
+import { app, abrirFolha, aviso, gravar } from './contexto.js';
+import {
+  baixarArquivo,
+  carregarJsPDF,
+  compartilharArquivo,
+  dadosDoResumo,
+  diaPadrao,
+  diasComJogos,
+  gerarPdf,
+  nomeDoArquivo,
+  podeCompartilharArquivo,
+} from './resumo.js';
 import { estadoVazio } from './armazenamento.js';
 import { temResultado } from './telas.js';
 import { dataCurta, dataLonga, esc, novoId, numero } from './util.js';
 
 const nome = (id) => esc(app.modelo.nomes[id] ?? '—');
+const LIMITE_OBS = 500;
 
 function opcoesAtleticas(selecionada = '', vaziaTexto = '—') {
   return `<option value="">${esc(vaziaTexto)}</option>${ATLETICAS.map(
@@ -210,8 +222,13 @@ export function folhaJogo({ id = null, mod = '', fase = 'grupo', grupo = '' } = 
       </div>
     </fieldset>`;
   const resultado = `<fieldset class="grupo-campos" data-resultado>${camposResultado(j, j.mod)}</fieldset>`;
-  // Jogo já marcado: o mais comum é lançar o placar, então o resultado vem primeiro.
-  const corpo = existente ? `${campoMod}${resultado}${confronto}${quando}` : `${campoMod}${confronto}${quando}${resultado}`;
+  const observacao = `<label class="campo"><span>Observações (aparecem no jogo e no resumo do dia)</span>
+      <textarea name="obs" id="jogo-obs" rows="3" maxlength="${LIMITE_OBS}" placeholder="Ex.: destaque da partida, quem fez os gols, recado para a próxima rodada">${esc(j.obs || '')}</textarea>
+    </label>`;
+  // Jogo já marcado: o mais comum é lançar o placar, então o resultado e a observação vêm primeiro.
+  const corpo = existente
+    ? `${campoMod}${resultado}${observacao}${confronto}${quando}`
+    : `${campoMod}${confronto}${quando}${resultado}${observacao}`;
   const rodape = `${existente ? '<button type="submit" class="botao perigo" value="excluir" data-confirmar="Toque de novo para excluir">Excluir jogo</button>' : ''}
     <span class="espaco"></span>
     ${existente?.res ? '<button type="submit" class="botao secundario" value="limpar">Tirar resultado</button>' : ''}
@@ -253,6 +270,7 @@ export function folhaJogo({ id = null, mod = '', fase = 'grupo', grupo = '' } = 
         hora: dados.get('hora') || '',
         local: String(dados.get('local') || '').trim(),
         res,
+        obs: String(dados.get('obs') || '').trim().slice(0, LIMITE_OBS),
         atualizadoEm: Date.now(),
       };
       gravar(app.loja.salvar('jogos', id || novoId(), doc), res ? 'Resultado salvo' : 'Jogo salvo');
@@ -516,6 +534,74 @@ export function folhaRemarcar(data) {
       const operacoes = pendentes.map(({ id, ...j }) => app.loja.salvar('jogos', id, { ...j, data: nova, atualizadoEm: Date.now() }));
       const destino = nova ? dataCurta(nova) : 'data a definir';
       gravar(Promise.all(operacoes), um ? `Jogo remarcado para ${destino}` : `${pendentes.length} jogos remarcados para ${destino}`);
+    },
+  });
+}
+
+// ---------- Resumo do dia em PDF ----------
+
+function opcoesDosDias(at, escolhido) {
+  const dias = at ? diasComJogos(app.modelo, at) : [];
+  if (!dias.length) return '<option value="">Sem jogos com data</option>';
+  const dia = dias.includes(escolhido) ? escolhido : diaPadrao(dias);
+  return dias.map((d) => `<option value="${d}"${d === dia ? ' selected' : ''}>${esc(dataLonga(d))}</option>`).join('');
+}
+
+function previaDoResumo(at, dia) {
+  if (!at || !dia) return 'Escolha a atlética e o dia.';
+  const { totais } = dadosDoResumo(app.modelo, at, dia);
+  const lancados = totais.jogos - totais.pendentes;
+  return `${totais.jogos} ${totais.jogos === 1 ? 'jogo' : 'jogos'} nesse dia, ${lancados} com resultado lançado.`;
+}
+
+export function folhaResumo({ dia = '' } = {}) {
+  const at = app.modelo.nossa || '';
+  const compartilhar = podeCompartilharArquivo();
+  const corpo = `<label class="campo"><span>Atlética</span><select name="at" id="resumo-atletica">${opcoesAtleticas(at, 'Escolha…')}</select></label>
+    <label class="campo"><span>Dia</span><select name="dia" id="resumo-dia">${opcoesDosDias(at, dia)}</select></label>
+    <p class="nota" data-previa></p>
+    <p class="nota">O PDF traz os jogos do dia com placar, parciais, observações e a situação no grupo, além da posição na geral.${compartilhar ? ' Em “Compartilhar” dá para mandar direto no grupo dos atletas.' : ''}</p>`;
+  const rodape = compartilhar
+    ? '<span class="espaco"></span><button type="submit" class="botao secundario" value="baixar">Baixar</button><button type="submit" class="botao" value="compartilhar">Compartilhar</button>'
+    : '<span class="espaco"></span><button type="submit" class="botao" value="baixar">Baixar PDF</button>';
+
+  abrirFolha({
+    titulo: 'Resumo do dia em PDF',
+    corpo,
+    rodape,
+    aoAbrir: (form) => {
+      carregarJsPDF().catch(() => {}); // adianta o download para o compartilhar sair na hora
+      const atualizar = () => {
+        form.querySelector('[data-previa]').textContent = previaDoResumo(form.elements.at.value, form.elements.dia.value);
+      };
+      form.elements.at.addEventListener('change', () => {
+        form.elements.dia.innerHTML = opcoesDosDias(form.elements.at.value, form.elements.dia.value);
+        atualizar();
+      });
+      form.elements.dia.addEventListener('change', atualizar);
+      atualizar();
+    },
+    aoEnviar: (dados, form, acao) => {
+      const atEscolhida = dados.get('at');
+      const diaEscolhido = dados.get('dia');
+      if (!atEscolhida) return 'Escolha a atlética.';
+      if (!diaEscolhido) return 'Essa atlética ainda não tem jogos com data marcada.';
+      const resumo = dadosDoResumo(app.modelo, atEscolhida, diaEscolhido);
+      const gerar = (JsPDF) => {
+        const blob = gerarPdf(JsPDF, resumo).output('blob');
+        const arquivo = nomeDoArquivo(resumo);
+        if (acao === 'compartilhar') return compartilharArquivo(blob, arquivo, `Resumo do dia · ${resumo.atletica}`);
+        baixarArquivo(blob, arquivo);
+        return Promise.resolve('baixado');
+      };
+      // Com o gerador já carregado, o PDF sai no mesmo toque (o celular só abre o compartilhar assim).
+      const pronto = globalThis.jspdf?.jsPDF;
+      (pronto ? gerar(pronto) : carregarJsPDF().then(gerar))
+        .then((r) => {
+          if (r === 'baixado') aviso('PDF baixado');
+          if (r === 'compartilhado') aviso('Resumo compartilhado');
+        })
+        .catch((erro) => aviso(erro?.message || 'Não deu para gerar o PDF.', 'erro'));
     },
   });
 }

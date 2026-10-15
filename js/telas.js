@@ -94,6 +94,7 @@ function cartaoJogo(ctx, j, { modalidade = true, data = false } = {}) {
         <span class="jogo-meta">${meta}</span>
         ${lado('a')}${lado('b')}
         ${detalhes.length ? `<span class="jogo-detalhe">${esc(detalhes.join(' · '))}</span>` : ''}
+        ${j.obs ? `<span class="jogo-obs"><strong>Obs.:</strong> ${esc(j.obs)}</span>` : ''}
       </span>
       <span class="jogo-selo">${selo}</span>
     ${fecha}</li>`;
@@ -197,7 +198,13 @@ export function inicio(ctx) {
   return `${topo}
     ${secao('Classificação geral', miniGeral(ctx, lista), { acao: '<a class="link" href="#/geral">Ver completa</a>' })}
     ${modelo.nossa ? secao('Próximos jogos', proximos.length ? listaJogos(ctx, proximos, { data: true }) : vazio(semJogos), { acao: '<a class="link" href="#/jogos">Todos os jogos</a>' }) : ''}
-    ${modelo.nossa && ultimos.length ? secao('Últimos resultados', listaJogos(ctx, ultimos, { data: true })) : ''}`;
+    ${
+      modelo.nossa && ultimos.length
+        ? secao('Últimos resultados', listaJogos(ctx, ultimos, { data: true }), {
+            acao: seEditar(ctx, `<button type="button" class="link" data-acao="resumo-dia" data-data="${esc(ultimos[0].data || '')}">Resumo em PDF</button>`),
+          })
+        : ''
+    }`;
 }
 
 // ---------- Jogos ----------
@@ -249,16 +256,24 @@ export function jogos(ctx) {
   } else {
     conteudo = [...porDia.entries()]
       .map(([dia, lista]) => {
+        const resumo = dia ? seEditar(ctx, `<button type="button" class="link" data-acao="resumo-dia" data-data="${dia}">Resumo em PDF</button>`) : '';
         const remarcar =
           aba === 'abertos' && dia ? seEditar(ctx, `<button type="button" class="link" data-acao="remarcar-dia" data-data="${dia}">Remarcar dia</button>`) : '';
-        return secao(dataLonga(dia), listaJogos(ctx, lista), { acao: remarcar });
+        return secao(dataLonga(dia), listaJogos(ctx, lista), { acao: resumo || remarcar ? `<span class="links-secao">${resumo}${remarcar}</span>` : '' });
       })
       .join('');
   }
 
   const sub = ctx.pode.editar ? 'Datas mudam? Edite o jogo ou remarque o dia inteiro.' : 'Horários e locais do tabelamento da CO.';
+  // Resumo em PDF e novo jogo: só para quem entrou com uma conta da equipe.
   return `${cabecalho('Jogos', sub, {
-    acao: seEditar(ctx, `<button type="button" class="botao" data-acao="novo-jogo" data-mod="${esc(ui.modJogos || '')}">Novo jogo</button>`),
+    acao: seEditar(
+      ctx,
+      `<div class="acoes">
+        <button type="button" class="botao secundario" data-acao="resumo-dia">Resumo do dia</button>
+        <button type="button" class="botao" data-acao="novo-jogo" data-mod="${esc(ui.modJogos || '')}">Novo jogo</button>
+      </div>`,
+    ),
   })}
     ${filtros}
     ${conteudo}`;

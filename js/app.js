@@ -167,8 +167,10 @@ folha.addEventListener('click', (e) => {
 });
 
 async function iniciar() {
+  // Endereço com ?local: modo de teste, só neste aparelho e sem login, sem tocar no banco de verdade.
+  const modoTeste = new URLSearchParams(location.search).has('local');
   try {
-    app.loja = await criarArmazenamento(firebaseConfig);
+    app.loja = await criarArmazenamento(modoTeste ? null : firebaseConfig);
   } catch (erro) {
     console.error(erro);
     principal.innerHTML = telas.erroConexao(erro);

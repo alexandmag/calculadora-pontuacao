@@ -635,9 +635,27 @@ input[type='time'] {
   background: var(--superficie);
 }
 
+textarea {
+  width: 100%;
+  min-height: 76px;
+  padding: 10px 12px;
+  border: 1px solid var(--linha);
+  border-radius: var(--raio-pequeno);
+  background: var(--superficie);
+  line-height: 1.4;
+  resize: vertical;
+}
+
 .filtros select {
   width: auto;
   max-width: 100%;
+}
+
+.links-secao {
+  display: inline-flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 4px 16px;
 }
 
 /* ---------- Início ---------- */
@@ -952,6 +970,24 @@ tr.nos .nome a {
   color: var(--tinta-suave);
   font-size: 0.78rem;
   font-variant-numeric: tabular-nums;
+}
+
+.jogo-obs {
+  display: -webkit-box;
+  margin-top: 2px;
+  overflow: hidden;
+  color: var(--tinta-suave);
+  font-size: 0.8rem;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+}
+
+.jogo-obs strong {
+  color: var(--tinta);
+  font-weight: 600;
 }
 
 .jogo-selo {
