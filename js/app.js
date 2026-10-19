@@ -4,6 +4,7 @@
 import { donoHash, firebaseConfig } from './firebase-config.js';
 import { criarArmazenamento } from './armazenamento.js';
 import { montarModelo } from './modelo.js';
+import { previsaoDoModelo, previsaoGuardada } from './previsao.js';
 import { calcularPermissao, hashEmail } from './permissoes.js';
 import * as telas from './telas.js';
 import { cliques, formularios, mudancas } from './acoes.js';
@@ -15,7 +16,7 @@ const folha = document.getElementById('folha');
 const areaConta = document.getElementById('conta');
 
 // Rota → aba do rodapé que fica acesa.
-const ABA_DA_TELA = { inicio: 'inicio', jogos: 'jogos', modalidades: 'modalidades', m: 'modalidades', geral: 'geral', a: 'geral', ajustes: 'ajustes' };
+const ABA_DA_TELA = { inicio: 'inicio', analise: 'inicio', jogos: 'jogos', modalidades: 'modalidades', m: 'modalidades', geral: 'geral', a: 'geral', ajustes: 'ajustes' };
 
 function rotaAtual() {
   const [tela = '', param = ''] = location.hash.replace(/^#\/?/, '').split('/');
@@ -23,6 +24,30 @@ function rotaAtual() {
 }
 
 let desenhoAdiado = false;
+
+// A previsão é só da equipe e leva alguns décimos de segundo: a tela sai primeiro ("calculando…") e
+// é desenhada de novo quando a conta termina. Fica guardada até os dados mudarem.
+let previsaoAgendada = null;
+function previsaoAtual() {
+  if (!app.pode.editar || !app.modelo) return null;
+  const pronta = previsaoGuardada(app.modelo);
+  if (pronta) return pronta;
+  if (previsaoAgendada !== app.modelo) {
+    const modelo = app.modelo;
+    previsaoAgendada = modelo;
+    setTimeout(() => {
+      if (app.modelo === modelo) {
+        try {
+          previsaoDoModelo(modelo);
+        } catch (erro) {
+          console.error('Não deu para calcular a previsão', erro);
+        }
+        desenhar();
+      }
+    }, 30);
+  }
+  return null;
+}
 
 function desenhar({ topo = false } = {}) {
   if (!app.modelo) return;
@@ -42,9 +67,12 @@ function desenhar({ topo = false } = {}) {
     usuario: app.usuario,
     equipe: app.equipe,
     dono: app.dono,
+    previsao: previsaoAtual(),
+    analises: app.analises,
   };
   const telasPorRota = {
     inicio: () => telas.inicio(ctx),
+    analise: () => telas.analise(ctx),
     jogos: () => telas.jogos(ctx),
     modalidades: () => telas.modalidades(ctx),
     m: () => telas.modalidade(ctx, param),
@@ -81,8 +109,31 @@ function desenharConta() {
 
 function atualizarPermissao() {
   app.pode = calcularPermissao({ modo: app.loja.modo, usuario: app.usuario, equipe: app.equipe, dono: app.dono, semAcesso: app.semAcesso });
+  acompanharAnalises();
   desenharConta();
   desenhar();
+}
+
+// Relatórios e destaques de atletas: só a equipe lê (no banco, quem não é da equipe recebe "sem permissão").
+let pararAnalises = null;
+function acompanharAnalises() {
+  if (app.pode.editar && !pararAnalises && app.loja.analises) {
+    pararAnalises = app.loja.analises.ouvir(
+      (docs) => {
+        app.analises = docs;
+        desenhar();
+      },
+      (erro) => {
+        console.error('Análises indisponíveis', erro);
+        app.analises = {};
+        desenhar();
+      },
+    );
+  } else if (!app.pode.editar && pararAnalises) {
+    pararAnalises();
+    pararAnalises = null;
+    app.analises = {};
+  }
 }
 
 let pararEquipe = null;
@@ -177,6 +228,7 @@ async function iniciar() {
     return;
   }
   app.pode = calcularPermissao({ modo: app.loja.modo });
+  acompanharAnalises();
   app.loja.aoFalhar((erro) => {
     app.erroConexao = erro;
     atualizarStatus();

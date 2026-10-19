@@ -35,6 +35,12 @@ service cloud.firestore {
       allow write: if ehAdmin(edicao);
     }
 
+    // Análises da equipe (relatórios e destaques de atletas): só a equipe lê e grava.
+    match /edicoes/{edicao}/analises/{documento} {
+      allow read: if ehEditor(edicao);
+      allow write: if ehEditor(edicao) && request.time < timestamp.date(2027, 3, 1);
+    }
+
     match /edicoes/{edicao}/{colecao}/{documento} {
       allow read: if colecao in ['config', 'modalidades', 'jogos', 'resultados', 'penalidades'];
       allow write: if colecao in ['config', 'modalidades', 'jogos', 'resultados', 'penalidades']

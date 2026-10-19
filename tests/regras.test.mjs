@@ -185,6 +185,38 @@ test('coletiva com repescagem: grupos → repescagem → semifinal → final', (
   assert.equal(r.ordem.find((l) => l.id === 'a2').etapa, ETAPA.repescagem);
 });
 
+test('repescagem em triangular (como no site da CO): o líder da tabela vai à semi e os outros param, na ordem', () => {
+  const grupos = { A: ['a1', 'a2', 'a3'], B: ['b1', 'b2', 'b3'], C: ['c1', 'c2', 'c3'] };
+  const grupo = Object.values(grupos).flatMap(([x, y, z]) => [jogo(x, y, placar(2, 0)), jogo(x, z, placar(2, 0)), jogo(y, z, placar(2, 0))]);
+  const rep = [jogo('a2', 'b2', placar(1, 1), 'repescagem'), jogo('a2', 'c2', placar(0, 3), 'repescagem')];
+  let r = classificacaoColetiva({ grupos, jogos: [...grupo, ...rep], esporte: ESPORTES.futsal, vagasDiretas: 1 });
+  assert.deepEqual(
+    ['a2', 'b2', 'c2'].map((id) => r.ordem.find((l) => l.id === id).etapa),
+    [ETAPA.naRepescagem, ETAPA.naRepescagem, ETAPA.naRepescagem],
+    'enquanto falta jogo, todos seguem na repescagem',
+  );
+  r = classificacaoColetiva({ grupos, jogos: [...grupo, ...rep, jogo('b2', 'c2', placar(2, 0), 'repescagem')], esporte: ESPORTES.futsal, vagasDiretas: 1 });
+  // b2: 4 pts (empate e vitória); c2: 3 pts; a2: 1 pt.
+  assert.equal(r.ordem.find((l) => l.id === 'b2').etapa, ETAPA.semifinalista);
+  assert.deepEqual(
+    r.ordem.slice(4, 6).map((l) => [l.id, l.posicao]),
+    [
+      ['c2', 5],
+      ['a2', 6],
+    ],
+  );
+  assert.deepEqual(ordemDe(r.tabelaRepescagem.tabela), ['b2', 'c2', 'a2']);
+});
+
+test('vôlei: sem as parciais, o total de pontos dos sets entra no saldo', () => {
+  const t = tabelaGrupo(['x', 'y'], [jogo('x', 'y', placar(2, 0, { totais: { a: 50, b: 41 } }))], ESPORTES.volei);
+  assert.deepEqual(t.tabela.map((l) => [l.id, l.pro, l.contra]), [
+    ['x', 50, 41],
+    ['y', 41, 50],
+  ]);
+  assert.equal(t.semParciais, false);
+});
+
 test('coletiva: depois da repescagem, os líderes e quem venceu a repescagem são os semifinalistas', () => {
   const grupos = { A: ['a1', 'a2'], B: ['b1', 'b2'], C: ['c1', 'c2'] };
   const jogos = [jogo('a1', 'a2', placar(1, 0)), jogo('b1', 'b2', placar(1, 0)), jogo('c1', 'c2', placar(1, 0)), jogo('a2', 'b2', placar(3, 0), 'repescagem')];

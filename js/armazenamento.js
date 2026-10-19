@@ -50,6 +50,14 @@ function criarLocal() {
     modo: 'local',
     conta: null,
     equipe: null,
+    analises: {
+      ouvir(fn) {
+        const enviar = (e) => fn(e.analises || {});
+        ouvintes.add(enviar);
+        enviar(estado);
+        return () => ouvintes.delete(enviar);
+      },
+    },
     ouvir(fn) {
       ouvintes.add(fn);
       fn(estado);
@@ -135,6 +143,21 @@ async function criarFirebase(config) {
     equipe: {
       ouvir: (fn, falha) => fs.onSnapshot(docEquipe, (snap) => fn(snap.exists() ? snap.data() : { admins: [], editores: [] }), falha),
       salvar: (dados) => fs.setDoc(docEquipe, limpar(dados)),
+    },
+    // Análises da equipe (relatórios e destaques de atletas): como a lista acima, só a equipe lê.
+    analises: {
+      ouvir: (fn, falha) =>
+        fs.onSnapshot(
+          colecao('analises'),
+          (snap) => {
+            const docs = {};
+            snap.forEach((d) => {
+              docs[d.id] = d.data();
+            });
+            fn(docs);
+          },
+          falha,
+        ),
     },
     ouvir(fn) {
       ouvintes.add(fn);

@@ -7,7 +7,8 @@ individuais e a classificação geral das 13 atléticas, seguindo o regulamento 
 - **Compartilhado e ao vivo.** Um diretor lança o placar na quadra e os outros veem na hora.
 - **Serve para todas as atléticas.** Cada pessoa escolhe no próprio aparelho qual atlética destacar.
 - **Datas soltas.** Jogo pode ficar sem data e um dia inteiro pode ser remarcado de uma vez (chuva).
-- **Projeção a qualquer momento.** A geral mostra quem seria campeã se o campeonato acabasse agora.
+- **Pontos só quando valem.** Vitória na fase de grupos não pontua na geral: os pontos de cada modalidade entram quando ela termina.
+- **Previsão para a equipe.** Quem está logado vê a chance de cada atlética passar de fase, ser campeã e quantos pontos deve levar, além de relatórios e destaques de atletas.
 
 ## Como usar
 
@@ -17,10 +18,17 @@ individuais e a classificação geral das 13 atléticas, seguindo o regulamento 
 2. **Modalidades** → numa coletiva, toque em **Montar grupos** e marque o grupo de cada atlética. O app cria todos os jogos de cada grupo.
 3. **Jogos** → toque num jogo para marcar data, hora e local e, depois, lançar o placar e uma observação (destaques, recados). Choveu? **Remarcar dia** move todos os jogos pendentes daquele dia.
    - **Resumo do dia** (só para a equipe): gera uma **imagem** ou um **PDF** com o escudo e os jogos da atlética naquele dia (placar, parciais, situação no grupo, observações e posição na geral). A imagem aparece direto na conversa do WhatsApp; o PDF é melhor para guardar ou imprimir. No celular, **Compartilhar** manda direto para o grupo dos atletas.
-4. Repescagem (onde houver), semifinais e final → **Adicionar jogo** na página da modalidade. Não há oitavas nem quartas.
+4. Repescagem (onde houver), semifinais e final → **Adicionar jogo** na página da modalidade. Não há oitavas nem quartas. A repescagem é um triangular entre os 2º colocados (3 jogos); a semifinal é o melhor 1º colocado contra quem venceu a repescagem e os outros dois 1º colocados entre si.
 5. Atletismo, natação, tênis, judô e jiu-jitsu → lance quem ficou do 1º ao 8º em cada prova, chave ou categoria.
 6. Quando a CO divulgar a classificação final de uma modalidade, **Confirme como oficial** (ou lance à mão).
-7. **Geral** → *Projeção* soma tudo o que já foi lançado; *Só oficiais* conta apenas as classificações confirmadas.
+7. **Geral** → *Conquistados* soma as colocações já definidas (coletiva com a final jogada, provas disputadas, classificações oficiais); *Só oficiais* conta apenas as confirmadas; *Previsão* (só a equipe) simula o resto do campeonato.
+
+### Previsão e análise (só a equipe)
+
+- O app estima a força de cada atlética em cada coletiva pelo saldo dos jogos e simula 1.000 vezes o que falta, no formato da CO. Mostra, por modalidade, a chance de liderar o grupo, ir à repescagem, chegar à semifinal, à final e ser campeã, os pontos esperados na geral e os adversários mais prováveis. Com poucos jogos a incerteza é grande; a cada rodada fica mais firme.
+- A previsão da geral soma os pontos já conquistados com os esperados nas coletivas em andamento. Modalidades sem resultado ainda (provas, lutas, xadrez, peteca) não entram.
+- **Análise** (link no Início): relatórios escritos e os rankings de atletas do site oficial (artilheiros, cestinhas...), guardados em `edicoes/2026/analises`, que só a equipe lê.
+- Quem só acompanha vê resultados, grupos e pontos conquistados, sem previsão.
 
 Faça um backup em **Ajustes → Baixar backup** no fim de cada dia de jogos.
 
@@ -50,7 +58,9 @@ transparente, uns 480 px de largura) e coloque `logo: 'img/atleticas/<id>.webp'`
 
 ### O que o regulamento não define (e o que o app faz)
 
-- **Colocações do 5º em diante nas coletivas.** O caminho é grupos → repescagem (onde houver) → semifinal → final. Assim que a fase final começa, o líder de cada grupo (nas modalidades com repescagem) ou os dois primeiros (nas sem repescagem) já contam como semifinalistas. Quem perdeu a repescagem vem logo depois dos quatro semifinalistas. Quem não passou dos grupos é ordenado pela posição no grupo e depois pela campanha (aproveitamento, saldo e gols pró por jogo). Enquanto uma fase não acaba, quem segue vivo é ordenado pela campanha. É uma **projeção**: confirme ou ajuste quando sair a oficial.
+- **Colocações do 5º em diante nas coletivas.** O caminho é grupos → repescagem (onde houver) → semifinal → final. Assim que a fase final começa, o líder de cada grupo (nas modalidades com repescagem) ou os dois primeiros (nas sem repescagem) já contam como semifinalistas. Quem perdeu a repescagem vem logo depois dos quatro semifinalistas. Quem não passou dos grupos é ordenado pela posição no grupo e depois pela campanha (aproveitamento, saldo e gols pró por jogo). Enquanto uma fase não acaba, quem segue vivo é ordenado pela campanha. Os pontos da modalidade só entram na geral quando a final tem resultado; confirme ou ajuste quando sair a oficial.
+- **Repescagem.** No site oficial ela aparece como uma tabela (todos contra todos). O app trata assim: o líder da repescagem vai à semifinal e os outros ficam logo depois dos semifinalistas, na ordem da tabela. Para a previsão, vão à repescagem os 2º colocados, e o "melhor 1º colocado" é o de melhor aproveitamento.
+- **Vôlei sem parciais.** O site oficial só mostra os pontos somados de cada time. Sem as parciais, o app usa esse total no saldo de pontos.
 - **W.O. técnico.** O RG Art. 27 §2º diz “salvo a perda de 12 pontos”. O app lê como *exceto*, então o W.O. técnico tira a atlética da modalidade mas não desconta 12. Dá para mudar em Ajustes.
 - **Jogos de quem deu W.O.** Os jogos anteriores da atlética são cancelados; o jogo do W.O. vale para o adversário com o placar do Anexo 1.
 - **Peteca.** Sem pontos de grupo nem desempate no regulamento: o app usa os do vôlei.
@@ -122,6 +132,7 @@ Roda os testes das regras de pontuação.
 | `js/modelo.js` | Junta os dados lançados com as regras e calcula tabelas e classificações |
 | `js/armazenamento.js` | Firebase (compartilhado, com login) ou armazenamento do aparelho (local) |
 | `js/permissoes.js` | Quem pode editar e administrar, a partir do login e da equipe |
+| `js/previsao.js` | Previsão das coletivas: força pelo saldo e simulação do resto do campeonato (testada em `tests/`) |
 | `js/resumo.js` | Dados do resumo do dia e o PDF (o gerador, jsPDF, só é baixado quando alguém pede um PDF) |
 | `js/resumo-imagem.js` | Resumo do dia em imagem PNG, desenhada no navegador |
 | `img/atleticas/` | Escudos das atléticas |

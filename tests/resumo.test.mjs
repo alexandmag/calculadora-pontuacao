@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { montarModelo } from '../js/modelo.js';
-import { dadosDoResumo, diaPadrao, diasComJogos, nomeDoArquivo, textoParaPdf } from '../js/resumo.js';
+import { dadosDoResumo, diaPadrao, diasComJogos, linhaDaGeral, nomeDoArquivo, textoParaPdf } from '../js/resumo.js';
 
 const DIA = '2026-10-17';
 const jogo = (mod, a, b, hora, res = null, extra = {}) => ({ mod, fase: 'grupo', grupo: 'A', a, b, data: DIA, hora, local: 'Quadra 1', res, ...extra });
@@ -81,4 +81,12 @@ test('o resumo leva o escudo da atlética, quando ela tem um', () => {
   const modelo = montarModelo(estadoDeTeste());
   assert.equal(dadosDoResumo(modelo, 'eng', DIA).logo, 'img/atleticas/eng.webp');
   assert.equal(dadosDoResumo(modelo, 'psi', DIA).logo, null);
+});
+
+test('com a previsão (só a equipe), o resumo leva a posição prevista na geral', () => {
+  const modelo = montarModelo(estadoDeTeste());
+  const previsao = { simuladas: ['futsal-m'], geral: [{ id: 'eng', posicao: 2, esperados: 47.6 }] };
+  assert.deepEqual(dadosDoResumo(modelo, 'eng', DIA, { previsao }).geral, { previsao: true, posicao: 2, total: 48 });
+  assert.equal(linhaDaGeral({ previsao: true, posicao: 2, total: 48 }), 'Previsão: 2º lugar na geral · 48 pontos esperados');
+  assert.equal(dadosDoResumo(modelo, 'eng', DIA).geral.previsao, undefined, 'sem previsão, vale a geral dos pontos conquistados');
 });

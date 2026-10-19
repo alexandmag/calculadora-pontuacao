@@ -52,11 +52,15 @@ export function montarModelo(estado, { nossaLocal = '' } = {}) {
       const vagasDiretas = m.repescagem ? 1 : 2;
       const r = classificacaoColetiva({ grupos: info.grupos, jogos: info.jogos, esporte: info.esporte, vagasDiretas });
       info.tabelas = r.tabelas;
+      info.tabelaRepescagem = r.tabelaRepescagem;
       info.wo = r.wo;
       info.participantes = r.ordem.length;
       info.temDados = info.jogos.some((j) => placarEfetivo(j, info.esporte));
-      // Sem nenhum resultado, a ordem seria só a da lista de atléticas: não projeta pontos.
-      info.calculada = info.temDados ? r.ordem : [];
+      info.encerrada = r.encerrada;
+      // Vitória nos grupos não vale ponto na geral: decide só quem segue. A colocação (e os pontos)
+      // só existe quando a final tem resultado. Até lá, "andamento" mostra até onde cada uma chegou.
+      info.andamento = info.temDados ? r.ordem : [];
+      info.calculada = r.encerrada ? r.ordem : [];
     } else if (m.tipo === 'provas') {
       info.resultados = Object.fromEntries(
         m.provas.map((p) => [p.id, estado.resultados[chaveResultado(m.id, p.id)]?.linhas || []]),
@@ -70,8 +74,9 @@ export function montarModelo(estado, { nossaLocal = '' } = {}) {
     if (Array.isArray(doc.oficial) && doc.oficial.some(Boolean)) {
       info.oficial = doc.oficial.map((id, i) => (id ? { id, posicao: i + 1 } : null)).filter(Boolean);
     }
-    info.estado = info.oficial ? 'oficial' : info.temDados ? 'andamento' : 'aguardando';
-    // A projeção usa a classificação oficial quando ela existe; senão, a calculada até agora.
+    info.estado = info.oficial ? 'oficial' : info.encerrada ? 'encerrada' : info.temDados ? 'andamento' : 'aguardando';
+    // Pontos conquistados: a classificação oficial quando existe; senão, a calculada (coletiva encerrada
+    // ou provas já disputadas).
     info.vigente = info.oficial || info.calculada;
     modalidades[m.id] = info;
   }
@@ -103,7 +108,7 @@ export function montarModelo(estado, { nossaLocal = '' } = {}) {
 
   const ids = ATLETICAS.map((a) => a.id);
   const geral = {
-    projecao: classificacaoGeral({
+    conquistados: classificacaoGeral({
       atleticas: ids,
       classificacoes: MODALIDADES.map((m) => ({ mod: m.id, ordem: modalidades[m.id].vigente })),
       zerados,
@@ -129,5 +134,6 @@ export function montarModelo(estado, { nossaLocal = '' } = {}) {
     modalidades,
     geral,
     oficiais: MODALIDADES.filter((m) => modalidades[m.id].oficial).length,
+    comPontos: MODALIDADES.filter((m) => modalidades[m.id].vigente.length).length,
   };
 }

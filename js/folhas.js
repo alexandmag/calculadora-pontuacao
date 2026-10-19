@@ -18,6 +18,7 @@ import {
   podeCompartilharArquivo,
 } from './resumo.js';
 import { gerarImagem } from './resumo-imagem.js';
+import { previsaoDoModelo } from './previsao.js';
 import { estadoVazio } from './armazenamento.js';
 import { temResultado } from './telas.js';
 import { dataCurta, dataLonga, esc, novoId, numero } from './util.js';
@@ -367,7 +368,8 @@ export function folhaGrupos(modId) {
 export function folhaClassificacao(modId) {
   const info = app.modelo.modalidades[modId];
   const { m, doc } = info;
-  const base = info.oficial || info.calculada.filter((l) => l.posicao);
+  // Sem classificação ainda, sugere a ordem de até onde cada uma chegou (fica fácil ajustar).
+  const base = info.oficial || [info.calculada, info.andamento || []].find((lista) => lista.length)?.filter((l) => l.posicao) || [];
   const porPosicao = Object.fromEntries(base.map((l) => [l.posicao, l.id]));
   const visiveis = Math.min(ATLETICAS.length, Math.max(8, info.participantes || 0, base.length));
   const linhas = ATLETICAS.map((_, i) => {
@@ -592,7 +594,7 @@ export function folhaResumo({ dia = '' } = {}) {
     if (preparado?.chave === chave && preparado.estado === app.estado) return preparado;
     const [atEscolhida, diaEscolhido, formatoEscolhido] = chave.split('|');
     if (!atEscolhida || !diaEscolhido) return (preparado = null);
-    const resumo = dadosDoResumo(app.modelo, atEscolhida, diaEscolhido);
+    const resumo = dadosDoResumo(app.modelo, atEscolhida, diaEscolhido, { previsao: previsaoDoModelo(app.modelo) });
     const atual = { chave, estado: app.estado, arquivo: null };
     atual.promessa = arquivoDoResumo(resumo, formatoEscolhido).then((arquivo) => (atual.arquivo = { ...arquivo, resumo }));
     atual.promessa.catch(() => {});

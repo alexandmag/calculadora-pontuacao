@@ -25,7 +25,9 @@ export function diaPadrao(dias, hoje = hojeISO()) {
   return passados.length ? passados[passados.length - 1] : dias[0] || '';
 }
 
-export function dadosDoResumo(modelo, at, dia) {
+// previsao (opcional, só a equipe gera o resumo): leva a posição prevista na geral em vez dos pontos
+// conquistados, que ficam em zero até as primeiras modalidades terminarem.
+export function dadosDoResumo(modelo, at, dia, { previsao = null } = {}) {
   const nome = (id) => modelo.nomes[id] ?? '—';
   const jogos = modelo.jogos
     .filter((j) => j.data === dia && (j.a === at || j.b === at))
@@ -73,8 +75,9 @@ export function dadosDoResumo(modelo, at, dia) {
   });
 
   const conta = (...tipos) => itens.filter((i) => tipos.includes(i.resultado)).length;
-  const temResultados = modelo.geral.projecao.some((l) => l.detalhe.length || l.ajustes.length);
-  const geral = modelo.geral.projecao.find((l) => l.id === at);
+  const temResultados = modelo.geral.conquistados.some((l) => l.detalhe.length || l.ajustes.length);
+  const geral = modelo.geral.conquistados.find((l) => l.id === at);
+  const prevista = previsao?.simuladas.length ? previsao.geral.find((l) => l.id === at) : null;
   return {
     id: at,
     atletica: nome(at),
@@ -89,7 +92,11 @@ export function dadosDoResumo(modelo, at, dia) {
       derrotas: conta('derrota', 'wo-contra'),
       pendentes: conta('pendente'),
     },
-    geral: temResultados && geral ? { posicao: geral.posicao, total: geral.total } : null,
+    geral: prevista
+      ? { previsao: true, posicao: prevista.posicao, total: Math.round(prevista.esperados) }
+      : temResultados && geral
+        ? { posicao: geral.posicao, total: geral.total }
+        : null,
   };
 }
 
@@ -213,7 +220,9 @@ export function quando(data) {
 }
 
 export function linhaDaGeral(geral) {
-  return geral ? `${geral.posicao}º lugar na geral (projeção) · ${geral.total} ${Math.abs(geral.total) === 1 ? 'ponto' : 'pontos'}` : '';
+  if (!geral) return '';
+  if (geral.previsao) return `Previsão: ${geral.posicao}º lugar na geral · ${geral.total} pontos esperados`;
+  return `${geral.posicao}º lugar na geral · ${geral.total} ${Math.abs(geral.total) === 1 ? 'ponto' : 'pontos'}`;
 }
 
 // logo: { dados, largura, altura } vindo de escudoParaPdf, ou null.

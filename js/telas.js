@@ -152,6 +152,30 @@ function frasePosicao(ctx, lista, eu) {
 const semResultados = (lista) => !lista.some((l) => l.detalhe.length || l.ajustes.length);
 const posicaoGeral = (l, lista) => (semResultados(lista) ? '–' : `${l.posicao}º`);
 
+// Chance em porcentagem, sem mostrar 0% ou 100% para o que ainda pode (ou não) acontecer.
+function pct(x) {
+  const v = Math.round(x * 100);
+  if (x > 0 && v === 0) return '<1%';
+  if (x < 1 && v === 100) return '>99%';
+  return `${v}%`;
+}
+
+const NOTA_GRUPOS = 'Vitória na fase de grupos não vale ponto na geral: só decide quem segue. Os pontos entram quando a modalidade termina.';
+
+function escudoPlacar(id) {
+  return LOGO[id] ? `<img class="escudo escudo-placar" src="${esc(LOGO[id])}" alt="" width="96" height="78">` : '';
+}
+
+// Rivais mais prováveis (semifinal ou final), em texto: "Direito (40%), Touros (25%)".
+function rivaisProvaveis(ctx, chances, limite = 3) {
+  return Object.entries(chances || {})
+    .filter(([, p]) => p >= 0.05)
+    .sort((x, y) => y[1] - x[1])
+    .slice(0, limite)
+    .map(([id, p]) => `${nome(ctx, id)} (${pct(p)})`)
+    .join(', ');
+}
+
 function miniGeral(ctx, lista) {
   const nossa = lista.find((l) => ehNossa(ctx, l.id));
   const topo = lista.slice(0, 5);
@@ -168,29 +192,108 @@ function linhaMini(ctx, l, lista) {
     </a></li>`;
 }
 
-export function inicio(ctx) {
+// Pontos já conquistados (colocações definidas). É o que quem só acompanha vê.
+function placarConquistados(ctx) {
   const { modelo } = ctx;
-  const lista = modelo.geral.projecao;
-  let topo = '';
-  if (!modelo.nossa) {
-    topo = escolherNossa(ctx);
-  } else {
-    const eu = lista.find((l) => l.id === modelo.nossa);
-    const euOficial = modelo.geral.oficial.find((l) => l.id === modelo.nossa);
-    topo = `<section class="placar-nos" aria-label="Nossa posição">
-        <p class="rotulo">${nome(ctx, modelo.nossa)} · projeção <a class="placar-trocar" href="#/ajustes">Trocar atlética</a></p>
-        <div class="placar-nos-numeros">
-          <span class="placar-pos">${posicaoGeral(eu, lista)}</span>
-          <span class="placar-pts">${inteiro(eu.total)}<small>pts</small></span>
-          ${LOGO[modelo.nossa] ? `<img class="escudo escudo-placar" src="${esc(LOGO[modelo.nossa])}" alt="" width="96" height="78">` : ''}
-        </div>
-        <p class="placar-frase">${frasePosicao(ctx, lista, eu)}</p>
-        <dl class="placar-extra">
-          <div><dt>Contando só oficiais</dt><dd>${posicaoGeral(euOficial, modelo.geral.oficial)} · ${pts(euOficial.total)}</dd></div>
-          <div><dt>Modalidades oficiais</dt><dd>${modelo.oficiais} de ${TOTAL_MODALIDADES}</dd></div>
-        </dl>
+  const lista = modelo.geral.conquistados;
+  const eu = lista.find((l) => l.id === modelo.nossa);
+  const euOficial = modelo.geral.oficial.find((l) => l.id === modelo.nossa);
+  return `<section class="placar-nos" aria-label="Nossa posição">
+      <p class="rotulo">${nome(ctx, modelo.nossa)} · pontos conquistados <a class="placar-trocar" href="#/ajustes">Trocar atlética</a></p>
+      <div class="placar-nos-numeros">
+        <span class="placar-pos">${posicaoGeral(eu, lista)}</span>
+        <span class="placar-pts">${inteiro(eu.total)}<small>pts</small></span>
+        ${escudoPlacar(modelo.nossa)}
+      </div>
+      <p class="placar-frase">${semResultados(lista) ? NOTA_GRUPOS : frasePosicao(ctx, lista, eu)}</p>
+      <dl class="placar-extra">
+        <div><dt>Contando só oficiais</dt><dd>${posicaoGeral(euOficial, modelo.geral.oficial)} · ${pts(euOficial.total)}</dd></div>
+        <div><dt>Modalidades com pontos</dt><dd>${modelo.comPontos} de ${TOTAL_MODALIDADES}</dd></div>
+      </dl>
+    </section>`;
+}
+
+// Para a equipe: onde a simulação do resto do campeonato coloca a atlética na geral.
+function placarPrevisao(ctx) {
+  const { modelo, previsao } = ctx;
+  if (previsao && !previsao.simuladas.length) return placarConquistados(ctx);
+  const rotulo = `<p class="rotulo">${nome(ctx, modelo.nossa)} · previsão <a class="placar-trocar" href="#/ajustes">Trocar atlética</a></p>`;
+  if (!previsao) {
+    return `<section class="placar-nos" aria-label="Nossa posição">${rotulo}
+        <div class="placar-nos-numeros"><span class="placar-pos">…</span>${escudoPlacar(modelo.nossa)}</div>
+        <p class="placar-frase">Calculando a previsão…</p>
       </section>`;
   }
+  const eu = previsao.geral.find((l) => l.id === modelo.nossa);
+  const conquistados = modelo.geral.conquistados;
+  const euHoje = conquistados.find((l) => l.id === modelo.nossa);
+  const rivais = previsao.geral
+    .filter((l) => l.id !== modelo.nossa && l.titulo >= 0.05)
+    .slice(0, 3)
+    .map((l) => `${nome(ctx, l.id)} (${pct(l.titulo)})`);
+  return `<section class="placar-nos" aria-label="Nossa posição">${rotulo}
+      <div class="placar-nos-numeros">
+        <span class="placar-pos">${eu.posicao}º</span>
+        <span class="placar-pts">${Math.round(eu.esperados)}<small>pts</small></span>
+        ${escudoPlacar(modelo.nossa)}
+      </div>
+      <p class="placar-frase">Chance de título geral: <strong>${pct(eu.titulo)}</strong>.${rivais.length ? ` Na briga: ${rivais.join(', ')}.` : ''}</p>
+      <dl class="placar-extra">
+        <div><dt>Faixa provável</dt><dd>${eu.faixa[0]} a ${eu.faixa[1]} pts</dd></div>
+        <div><dt>Conquistados até agora</dt><dd>${posicaoGeral(euHoje, conquistados)} · ${pts(euHoje.total)}</dd></div>
+      </dl>
+    </section>`;
+}
+
+function miniPrevisao(ctx) {
+  const { previsao } = ctx;
+  if (!previsao) return vazio('Calculando a previsão…');
+  const lista = previsao.geral;
+  const linha = (l) => `<li class="${classeNossa(ctx, l.id)}"><a href="#/a/${l.id}">
+      <span class="pos">${l.posicao}º</span>
+      <span class="nome">${nome(ctx, l.id)}<small>título ${pct(l.titulo)}</small></span>
+      <span class="valor">${Math.round(l.esperados)}<small> pts</small></span>
+    </a></li>`;
+  const nossa = lista.find((l) => ehNossa(ctx, l.id));
+  const linhas = lista.slice(0, 5).map(linha);
+  if (nossa && nossa.posicao > 5) linhas.push('<li class="reticencias" aria-hidden="true">⋯</li>', linha(nossa));
+  return `<ol class="painel lista-mini">${linhas.join('')}</ol>`;
+}
+
+function relatorios(ctx) {
+  return Object.entries(ctx.analises || {})
+    .filter(([, d]) => d?.tipo === 'relatorio')
+    .map(([id, d]) => ({ id, ...d }))
+    .sort((x, y) => String(y.data || '').localeCompare(String(x.data || '')));
+}
+
+export function inicio(ctx) {
+  const { modelo } = ctx;
+  const equipe = ctx.pode.editar;
+  const lista = modelo.geral.conquistados;
+  let topo = '';
+  if (!modelo.nossa) topo = escolherNossa(ctx);
+  else topo = equipe ? placarPrevisao(ctx) : placarConquistados(ctx);
+
+  // A equipe vê a previsão e a análise; quem só acompanha vê os pontos já conquistados.
+  let classificacao;
+  if (equipe && (!ctx.previsao || ctx.previsao.simuladas.length)) {
+    classificacao = secao('Previsão da geral', miniPrevisao(ctx), { acao: '<button type="button" class="link" data-acao="ver-previsao">Ver completa</button>' });
+  } else {
+    classificacao = secao('Classificação geral', semResultados(lista) ? vazio(`Ninguém pontuou ainda. ${NOTA_GRUPOS}`) : miniGeral(ctx, lista), {
+      acao: '<a class="link" href="#/geral">Ver completa</a>',
+    });
+  }
+  const ultimoRelatorio = relatorios(ctx)[0];
+  const cartaoAnalise = equipe
+    ? secao(
+        'Análise da equipe',
+        `<a class="painel cartao-analise" href="#/analise">
+          <span class="cartao-analise-titulo">${esc(ultimoRelatorio?.titulo || 'Chances por modalidade e destaques')}</span>
+          <span class="cartao-analise-sub">${esc(ultimoRelatorio?.resumo || 'Quem tende a passar de fase, contra quem devemos jogar e os atletas que mais pontuam.')}</span>
+        </a>`,
+      )
+    : '';
 
   const nossos = modelo.nossa ? modelo.jogos.filter((j) => j.a === modelo.nossa || j.b === modelo.nossa) : [];
   const proximos = nossos.filter((j) => !temResultado(j)).sort(compararJogos).slice(0, 5);
@@ -200,7 +303,8 @@ export function inicio(ctx) {
     : 'Nenhum jogo marcado ainda.';
 
   return `${topo}
-    ${secao('Classificação geral', miniGeral(ctx, lista), { acao: '<a class="link" href="#/geral">Ver completa</a>' })}
+    ${cartaoAnalise}
+    ${classificacao}
     ${modelo.nossa ? secao('Próximos jogos', proximos.length ? listaJogos(ctx, proximos, { data: true }) : vazio(semJogos), { acao: '<a class="link" href="#/jogos">Todos os jogos</a>' }) : ''}
     ${
       modelo.nossa && ultimos.length
@@ -287,6 +391,7 @@ export function jogos(ctx) {
 
 function seloEstado(info) {
   if (info.estado === 'oficial') return '<span class="selo selo-oficial">Oficial</span>';
+  if (info.estado === 'encerrada') return '<span class="selo selo-encerrada">Encerrada</span>';
   if (info.estado === 'andamento') return '<span class="selo selo-andamento">Em andamento</span>';
   return '<span class="selo selo-aguardando">Aguardando</span>';
 }
@@ -308,9 +413,12 @@ function resumoModalidade(info) {
 
 function itemModalidade(ctx, info) {
   const nossa = info.vigente.find((l) => ehNossa(ctx, l.id) && l.posicao);
+  // Para a equipe, enquanto não há colocação, a chance de chegar à semifinal.
+  const chance = !nossa && ctx.pode.editar && ctx.modelo.nossa ? ctx.previsao?.modalidades[info.m.id]?.[ctx.modelo.nossa] : null;
+  const lado = nossa ? `<span class="mod-nossa">Nós: ${nossa.posicao}º</span>` : chance && !chance.eliminada ? `<span class="mod-nossa">Semi: ${pct(chance.semi)}</span>` : '';
   return `<li><a class="mod" href="#/m/${info.m.id}">
       <span class="mod-texto"><span class="mod-nome">${esc(info.m.nome)}</span><span class="mod-sub">${resumoModalidade(info)}</span></span>
-      <span class="mod-lado">${seloEstado(info)}${nossa ? `<span class="mod-nossa">Nós: ${nossa.posicao}º</span>` : ''}</span>
+      <span class="mod-lado">${seloEstado(info)}${lado}</span>
     </a></li>`;
 }
 
@@ -388,7 +496,8 @@ function blocoFinais(ctx, info) {
   const { m } = info;
   const jogos = info.jogos.filter((j) => j.fase !== 'grupo');
   const quantos = (fase) => jogos.filter((j) => j.fase === fase).length;
-  const proxima = m.repescagem && !quantos('repescagem') ? 'repescagem' : quantos('semifinal') < 2 ? 'semifinal' : 'final';
+  // A repescagem é um triangular (3 jogos) entre os 2º colocados.
+  const proxima = m.repescagem && quantos('repescagem') < 3 && !quantos('semifinal') ? 'repescagem' : quantos('semifinal') < 2 ? 'semifinal' : 'final';
   const titulo = m.repescagem ? 'Repescagem, semifinal e final' : 'Semifinal e final';
   const botao = seEditar(
     ctx,
@@ -399,10 +508,14 @@ function blocoFinais(ctx, info) {
     const texto = ctx.pode.editar ? `Quando acabarem os grupos, adicione aqui ${fases}.` : `${fases.charAt(0).toUpperCase()}${fases.slice(1)} aparecem aqui quando acabarem os grupos.`;
     return secao(titulo, vazio(texto), { acao: botao });
   }
+  const tabelaRep = info.tabelaRepescagem && info.tabelaRepescagem.tabela.length > 2 ? tabelaDoGrupo(ctx, info, info.tabelaRepescagem) : '';
   const porFase = ORDEM_FASES.filter((f) => f !== 'grupo')
     .map((f) => [f, jogos.filter((j) => j.fase === f).sort(compararJogos)])
     .filter(([, lista]) => lista.length)
-    .map(([f, lista]) => `<div class="grupo"><h3>${esc(NOME_FASE[f])}</h3>${listaJogos(ctx, lista, { modalidade: false, data: true })}</div>`)
+    .map(
+      ([f, lista]) =>
+        `<div class="grupo"><h3>${esc(NOME_FASE[f])}</h3>${f === 'repescagem' ? tabelaRep : ''}${listaJogos(ctx, lista, { modalidade: false, data: true })}</div>`,
+    )
     .join('');
   return secao(titulo, porFase, { acao: botao });
 }
@@ -475,10 +588,11 @@ function blocoClassificacao(ctx, info) {
   const temEmpate = !oficial && lista.some((l) => l.empatado);
   let explicacao;
   if (oficial) explicacao = 'Classificação oficial divulgada pela CO: é esta que vale na classificação geral.';
-  else if (m.tipo === 'coletiva')
+  else if (m.tipo === 'coletiva' && lista.length)
     explicacao =
-      'Projeção com os jogos lançados. 3º lugar é de quem perdeu a semifinal para a campeã e 4º de quem perdeu para a vice. Depois vem quem perdeu a repescagem e, por fim, quem não passou dos grupos, pela posição no grupo e pela campanha. Quando a CO divulgar a oficial, confirme ou ajuste.';
-  else if (m.tipo === 'provas') explicacao = 'Projeção pela soma dos pontos. Quando a CO divulgar a oficial, confirme ou ajuste.';
+      'Calculada com todos os jogos: a final define campeã e vice; 3º é quem perdeu a semifinal para a campeã e 4º quem perdeu para a vice. Depois vem quem não venceu a repescagem e, por fim, quem não passou dos grupos, pela posição no grupo e pela campanha. Quando a CO divulgar a oficial, confirme ou ajuste.';
+  else if (m.tipo === 'coletiva') explicacao = `A colocação e os pontos saem quando a final tiver resultado. ${NOTA_GRUPOS}`;
+  else if (m.tipo === 'provas') explicacao = 'Soma dos pontos das provas já lançadas. Quando a CO divulgar a oficial, confirme ou ajuste.';
   else explicacao = 'Lance a classificação final quando a CO divulgar.';
 
   const linhas = lista
@@ -500,7 +614,7 @@ function blocoClassificacao(ctx, info) {
     )
     .join('');
 
-  const selo = oficial ? '<span class="selo selo-oficial">Oficial</span>' : lista.length ? '<span class="selo selo-projecao">Projeção</span>' : '';
+  const selo = oficial ? '<span class="selo selo-oficial">Oficial</span>' : lista.length ? '<span class="selo selo-encerrada">Calculada</span>' : '';
   const botoes = ctx.pode.editar
     ? [
         !oficial && lista.length ? `<button type="button" class="botao" data-acao="confirmar-oficial" data-mod="${m.id}">Confirmar como oficial</button>` : '',
@@ -513,7 +627,7 @@ function blocoClassificacao(ctx, info) {
   return `<section class="secao" id="classificacao">
       <div class="secao-topo"><h2>Classificação</h2>${selo}</div>
       <p class="nota">${explicacao}</p>
-      ${linhas ? `<ol class="painel lista-classif">${linhas}</ol>` : vazio('Nada lançado ainda.')}
+      ${linhas ? `<ol class="painel lista-classif">${linhas}</ol>` : m.tipo === 'coletiva' ? '' : vazio('Nada lançado ainda.')}
       ${temEmpate ? '<p class="alerta">Há empates em todos os critérios (≈). O regulamento manda sortear: ajuste à mão quando sair o sorteio.</p>' : ''}
       ${botoes ? `<div class="acoes">${botoes}</div>` : ''}
     </section>`;
@@ -548,6 +662,45 @@ function itemPunicao(ctx, p, descricao) {
     : `<li class="item-punicao${classeNossa(ctx, p.at)}">${conteudo}</li>`;
 }
 
+// Previsão da modalidade (só a equipe): chance de cada atlética em cada fase e pontos esperados na geral.
+function blocoPrevisao(ctx, info) {
+  if (!ctx.pode.editar || info.vigente.length) return '';
+  if (!ctx.previsao) return secao('Previsão', '<p class="nota">Calculando a previsão…</p>');
+  const dados = ctx.previsao.modalidades[info.m.id];
+  if (!dados) return '';
+  const grupoDe = Object.fromEntries(Object.entries(info.grupos).flatMap(([letra, membros]) => membros.map((id) => [id, letra])));
+  const comRepescagem = Boolean(info.m.repescagem);
+  const linhas = Object.entries(dados)
+    .sort((x, y) => y[1].pontos - x[1].pontos || y[1].titulo - x[1].titulo)
+    .map(
+      ([id, c]) => `<tr class="${classeNossa(ctx, id).trim()}${c.eliminada ? ' eliminada' : ''}">
+        <td class="nome">${nome(ctx, id)}<small>Grupo ${esc(grupoDe[id] || '?')}</small></td>
+        <td>${pct(c.lider)}</td>
+        ${comRepescagem ? `<td>${pct(c.repescagem)}</td>` : ''}
+        <td>${pct(c.semi)}</td><td>${pct(c.final)}</td><td class="destaque">${pct(c.titulo)}</td>
+        <td>${c.pontos.toFixed(1).replace('.', ',')}</td>
+      </tr>`,
+    )
+    .join('');
+  const nossa = ctx.modelo.nossa && dados[ctx.modelo.nossa];
+  let caminho = '';
+  if (nossa && !nossa.eliminada) {
+    const semi = rivaisProvaveis(ctx, nossa.rivalSemi);
+    const fin = rivaisProvaveis(ctx, nossa.rivalFinal);
+    const partes = [semi ? `semifinal contra ${semi}` : '', fin ? `final contra ${fin}` : ''].filter(Boolean);
+    if (partes.length) caminho = `<p class="caminho"><strong>Nosso caminho mais provável:</strong> ${partes.join('; ')}. A porcentagem é a chance de o jogo acontecer.</p>`;
+  }
+  return secao(
+    'Previsão',
+    `${caminho}
+    <div class="tabela-rolagem painel"><table class="tabela tabela-previsao">
+      <thead><tr><th class="nome" scope="col">Atlética</th><th scope="col" title="Terminar em 1º no grupo">Líder</th>${comRepescagem ? '<th scope="col" title="Ir para a repescagem">Rep.</th>' : ''}<th scope="col">Semi</th><th scope="col">Final</th><th scope="col">Título</th><th scope="col" title="Pontos esperados na geral">Pts</th></tr></thead>
+      <tbody>${linhas}</tbody>
+    </table></div>
+    <p class="nota">Simulação de ${ctx.previsao.simulacoes.toLocaleString('pt-BR')} campeonatos com os resultados até agora: a força de cada atlética sai dos placares (saldo), com muita incerteza enquanto há poucos jogos. Pts são os pontos esperados na geral. Só a equipe vê esta parte.</p>`,
+  );
+}
+
 export function modalidade(ctx, id) {
   const info = ctx.modelo.modalidades[id];
   if (!info) return naoEncontrada('Modalidade não encontrada.', '#/modalidades', 'Modalidades');
@@ -557,7 +710,7 @@ export function modalidade(ctx, id) {
     const avisoPeteca = info.esporte.semRegraPropria
       ? '<p class="alerta">O regulamento não define pontos de grupo nem desempate da peteca. O app usa os do vôlei até a CO definir.</p>'
       : '';
-    return `${topo}${avisoPeteca}${blocoGrupos(ctx, info)}${blocoFinais(ctx, info)}${blocoClassificacao(ctx, info)}${blocoPunicoes(ctx, info)}`;
+    return `${topo}${avisoPeteca}${blocoPrevisao(ctx, info)}${blocoGrupos(ctx, info)}${blocoFinais(ctx, info)}${blocoClassificacao(ctx, info)}${blocoPunicoes(ctx, info)}`;
   }
   if (m.tipo === 'provas') {
     return `${topo}${blocoProvas(ctx, info)}${blocoPontosProvas(ctx, info)}${blocoClassificacao(ctx, info)}${blocoPunicoes(ctx, info)}`;
@@ -567,8 +720,45 @@ export function modalidade(ctx, id) {
 
 // ---------- Geral ----------
 
+function tabelaPrevisaoGeral(ctx) {
+  const { previsao } = ctx;
+  if (!previsao) return vazio('Calculando a previsão…');
+  if (!previsao.simuladas.length) return vazio('Nenhuma coletiva em andamento para simular: a classificação já é a dos pontos conquistados.');
+  const linhas = previsao.geral
+    .map(
+      (l) => `<tr class="${classeNossa(ctx, l.id).trim()}">
+        <td class="pos">${l.posicao}º</td>
+        <td class="nome"><a href="#/a/${l.id}">${nome(ctx, l.id)}</a></td>
+        <td class="destaque">${Math.round(l.esperados)}</td>
+        <td>${l.faixa[0]}–${l.faixa[1]}</td>
+        <td>${pct(l.titulo)}</td><td>${pct(l.podio)}</td>
+      </tr>`,
+    )
+    .join('');
+  const coletivas = previsao.simuladas.map((id) => MODALIDADE[id].curto).join(', ');
+  return `<div class="tabela-rolagem painel"><table class="tabela tabela-geral tabela-previsao">
+      <thead><tr>
+        <th class="pos" scope="col">#</th><th class="nome" scope="col">Atlética</th><th scope="col" title="Pontos esperados">Pts</th>
+        <th scope="col" title="8 em cada 10 simulações terminam nesta faixa">Faixa</th><th scope="col">Título</th><th scope="col" title="Terminar entre as 3 primeiras">Pódio</th>
+      </tr></thead>
+      <tbody>${linhas}</tbody>
+    </table></div>
+    <p class="nota">Pontos já conquistados mais a média de ${previsao.simulacoes.toLocaleString('pt-BR')} simulações das coletivas em andamento (${esc(coletivas)}). Faixa: 8 em cada 10 simulações terminam dentro dela. Ainda não entram as modalidades sem resultado (provas, lutas, xadrez, peteca), que podem mudar bastante a briga. Só a equipe vê a previsão.</p>`;
+}
+
 export function geral(ctx) {
-  const modo = ctx.ui.modoGeral === 'oficial' ? 'oficial' : 'projecao';
+  const equipe = ctx.pode.editar;
+  let modo = ['conquistados', 'oficial', 'previsao'].includes(ctx.ui.modoGeral) ? ctx.ui.modoGeral : 'conquistados';
+  if (modo === 'previsao' && !equipe) modo = 'conquistados';
+  const botoes = `<div class="filtros">
+      <div class="segmentado" role="group" aria-label="O que somar">
+        <button type="button" data-acao="modo-geral" data-modo="conquistados" aria-pressed="${modo === 'conquistados'}">Conquistados</button>
+        <button type="button" data-acao="modo-geral" data-modo="oficial" aria-pressed="${modo === 'oficial'}">Só oficiais</button>
+        ${equipe ? `<button type="button" data-acao="modo-geral" data-modo="previsao" aria-pressed="${modo === 'previsao'}">Previsão</button>` : ''}
+      </div>
+    </div>`;
+  const sub = `${ctx.modelo.comPontos} de ${TOTAL_MODALIDADES} modalidades com pontos · ${ctx.modelo.oficiais} oficiais`;
+  if (modo === 'previsao') return `${cabecalho('Classificação geral', sub)}${botoes}${tabelaPrevisaoGeral(ctx)}`;
   const lista = ctx.modelo.geral[modo];
   const temPerdas = lista.some((l) => l.perdas);
   const linhas = lista
@@ -583,16 +773,11 @@ export function geral(ctx) {
     )
     .join('');
   const nota =
-    modo === 'projecao'
-      ? 'Soma a classificação oficial de cada modalidade e, onde ela ainda não saiu, a projeção com os resultados lançados até agora.'
+    modo === 'conquistados'
+      ? `Soma só colocações já definidas: coletivas com a final jogada, provas já disputadas e classificações oficiais, mais as perdas por W.O. e punições. ${NOTA_GRUPOS}`
       : 'Só as modalidades com classificação oficial confirmada, mais as perdas por W.O. e punições.';
-  return `${cabecalho('Classificação geral', `${ctx.modelo.oficiais} de ${TOTAL_MODALIDADES} modalidades com classificação oficial`)}
-    <div class="filtros">
-      <div class="segmentado" role="group" aria-label="O que somar">
-        <button type="button" data-acao="modo-geral" data-modo="projecao" aria-pressed="${modo === 'projecao'}">Projeção</button>
-        <button type="button" data-acao="modo-geral" data-modo="oficial" aria-pressed="${modo === 'oficial'}">Só oficiais</button>
-      </div>
-    </div>
+  return `${cabecalho('Classificação geral', sub)}
+    ${botoes}
     <p class="nota">${nota}</p>
     <div class="tabela-rolagem painel"><table class="tabela tabela-geral">
       <thead><tr>
@@ -610,27 +795,136 @@ export function geral(ctx) {
 export function atletica(ctx, id) {
   const a = ATLETICAS.find((x) => x.id === id);
   if (!a) return naoEncontrada('Atlética não encontrada.', '#/geral', 'Classificação geral');
-  const proj = ctx.modelo.geral.projecao.find((l) => l.id === id);
+  const conq = ctx.modelo.geral.conquistados.find((l) => l.id === id);
   const ofic = ctx.modelo.geral.oficial.find((l) => l.id === id);
   const porMod = MODALIDADES.map((m) => {
-    const d = proj.detalhe.find((x) => x.mod === m.id);
+    const d = conq.detalhe.find((x) => x.mod === m.id);
     if (!d) return '';
     const oficial = Boolean(ctx.modelo.modalidades[m.id].oficial);
     return `<li><a class="mod" href="#/m/${m.id}">
         <span class="mod-texto"><span class="mod-nome">${esc(m.nome)}</span><span class="mod-sub">${d.posicao}º lugar${d.zerado ? ' · sem pontos (W.O. ou fraude)' : ''}</span></span>
-        <span class="mod-lado">${oficial ? '<span class="selo selo-oficial">Oficial</span>' : '<span class="selo selo-projecao">Projeção</span>'}<span class="valor">${d.pontos}<small> pts</small></span></span>
+        <span class="mod-lado">${oficial ? '<span class="selo selo-oficial">Oficial</span>' : '<span class="selo selo-encerrada">Calculada</span>'}<span class="valor">${d.pontos}<small> pts</small></span></span>
       </a></li>`;
   }).join('');
-  const perdas = proj.ajustes
+  const perdas = conq.ajustes
     .map((p) => `<li class="item-punicao"><span class="nome">${esc(p.motivo)}</span><span class="valor">${comSinal(p.pontos)}</span></li>`)
     .join('');
+  // Só a equipe: a previsão na geral e em cada coletiva em andamento.
+  const prev = ctx.pode.editar ? ctx.previsao : null;
+  const naGeral = prev?.simuladas.length ? prev.geral.find((l) => l.id === id) : null;
+  const previsaoMods = prev
+    ? prev.simuladas
+        .filter((mod) => prev.modalidades[mod][id])
+        .map((mod) => {
+          const c = prev.modalidades[mod][id];
+          const texto = c.eliminada ? 'Fora por W.O.' : `semi ${pct(c.semi)} · final ${pct(c.final)} · título ${pct(c.titulo)}`;
+          return `<li><a class="mod" href="#/m/${mod}">
+              <span class="mod-texto"><span class="mod-nome">${esc(MODALIDADE[mod].nome)}</span><span class="mod-sub">${texto}</span></span>
+              <span class="mod-lado"><span class="valor">${c.pontos.toFixed(1).replace('.', ',')}<small> pts</small></span></span>
+            </a></li>`;
+        })
+        .join('')
+    : '';
   return `${cabecalho(ctx.modelo.nomes[id], esc(a.nome), { voltar: { href: '#/geral', texto: 'Classificação geral' }, logo: LOGO[id] })}
     <dl class="numeros">
-      <div><dt>Projeção</dt><dd>${posicaoGeral(proj, ctx.modelo.geral.projecao)} <small>${pts(proj.total)}</small></dd></div>
-      <div><dt>Só oficiais</dt><dd>${posicaoGeral(ofic, ctx.modelo.geral.oficial)} <small>${pts(ofic.total)}</small></dd></div>
+      <div><dt>Conquistados</dt><dd>${posicaoGeral(conq, ctx.modelo.geral.conquistados)} <small>${pts(conq.total)}</small></dd></div>
+      ${naGeral ? `<div><dt>Previsão</dt><dd>${naGeral.posicao}º <small>${Math.round(naGeral.esperados)} pts</small></dd></div>` : `<div><dt>Só oficiais</dt><dd>${posicaoGeral(ofic, ctx.modelo.geral.oficial)} <small>${pts(ofic.total)}</small></dd></div>`}
     </dl>
-    ${secao('Por modalidade', porMod ? `<ul class="painel lista-mod">${porMod}</ul>` : vazio('Nenhuma colocação ainda.'))}
+    ${secao('Pontos por modalidade', porMod ? `<ul class="painel lista-mod">${porMod}</ul>` : vazio(`Nenhuma colocação definida ainda. ${NOTA_GRUPOS}`))}
+    ${previsaoMods ? secao('Previsão nas coletivas', `<ul class="painel lista-mod">${previsaoMods}</ul><p class="nota">Pontos esperados na geral em cada coletiva. Só a equipe vê.</p>`) : ''}
     ${perdas ? secao('Perdas', `<ul class="painel lista-punicoes">${perdas}</ul>`) : ''}`;
+}
+
+// ---------- Análise (só a equipe) ----------
+
+function blocoRelatorio(r, aberto) {
+  const secoes = (r.secoes || [])
+    .map(
+      (s) => `<div class="relatorio-secao">
+          ${s.titulo ? `<h3>${esc(s.titulo)}</h3>` : ''}
+          ${(s.paragrafos || []).map((p) => `<p>${esc(p)}</p>`).join('')}
+          ${s.itens?.length ? `<ul>${s.itens.map((i) => `<li>${esc(i)}</li>`).join('')}</ul>` : ''}
+        </div>`,
+    )
+    .join('');
+  return `<details class="painel relatorio"${aberto ? ' open' : ''}>
+      <summary><span class="relatorio-titulo">${esc(r.titulo || 'Relatório')}</span>${r.resumo ? `<span class="relatorio-resumo">${esc(r.resumo)}</span>` : ''}</summary>
+      <div class="relatorio-corpo">${secoes}</div>
+    </details>`;
+}
+
+// Rankings do site oficial (artilheiros, cestinhas...), com o time de cada atleta.
+function blocoAtletas(ctx, doc) {
+  const mods = MODALIDADES.filter((m) => doc.modalidades?.[m.id]);
+  if (!mods.length) return '';
+  const nossa = ctx.modelo.nossa;
+  const blocos = mods
+    .map((m) => {
+      const rankings = Object.entries(doc.modalidades[m.id]).filter(([, lista]) => lista?.length);
+      if (!rankings.length) return '';
+      const listas = rankings
+        .map(([titulo, lista]) => {
+          const nossos = lista.filter((l) => l.at === nossa);
+          const topo = lista.slice(0, 5);
+          const extra = nossos.filter((l) => !topo.includes(l)).slice(0, 2);
+          const item = (l) => `<li class="${classeNossa(ctx, l.at).trim()}">
+              <span class="pos">${l.pos ?? ''}${l.pos ? 'º' : ''}</span>
+              <span class="nome">${esc(l.nome)}<small>${nome(ctx, l.at)}</small></span>
+              <span class="valor">${esc(l.total)}</span>
+            </li>`;
+          return `<div class="ranking"><h4>${esc(titulo)}</h4><ol class="lista-ranking">${topo.map(item).join('')}${extra.length ? `<li class="reticencias" aria-hidden="true">⋯</li>${extra.map(item).join('')}` : ''}</ol></div>`;
+        })
+        .join('');
+      return `<details class="painel atletas-mod"><summary>${esc(m.nome)}</summary><div class="rankings">${listas}</div></details>`;
+    })
+    .join('');
+  const quando = doc.atualizadoEm ? ` Atualizado em ${esc(dataCurta(String(doc.atualizadoEm).slice(0, 10)))}.` : '';
+  return secao('Destaques individuais', `${blocos}<p class="nota">Rankings do site oficial da competição, só das coletivas.${quando}</p>`);
+}
+
+function blocoNossasChances(ctx) {
+  const { previsao, modelo } = ctx;
+  if (!modelo.nossa) return '';
+  if (!previsao) return secao('Nossas chances', vazio('Calculando a previsão…'));
+  const linhas = previsao.simuladas
+    .map((mod) => [mod, previsao.modalidades[mod][modelo.nossa]])
+    .filter(([, c]) => c)
+    .sort((x, y) => y[1].pontos - x[1].pontos)
+    .map(
+      ([mod, c]) => `<tr>
+        <td class="nome"><a href="#/m/${mod}">${esc(MODALIDADE[mod].curto)}</a></td>
+        <td>${c.eliminada ? '—' : pct(c.semi)}</td><td>${c.eliminada ? '—' : pct(c.final)}</td><td class="destaque">${c.eliminada ? '—' : pct(c.titulo)}</td>
+        <td>${c.pontos.toFixed(1).replace('.', ',')}</td>
+      </tr>`,
+    )
+    .join('');
+  if (!linhas) return '';
+  return secao(
+    `Chances de ${modelo.nomes[modelo.nossa]}`,
+    `<div class="tabela-rolagem painel"><table class="tabela tabela-previsao">
+      <thead><tr><th class="nome" scope="col">Modalidade</th><th scope="col">Semi</th><th scope="col">Final</th><th scope="col">Título</th><th scope="col" title="Pontos esperados na geral">Pts</th></tr></thead>
+      <tbody>${linhas}</tbody>
+    </table></div>
+    <p class="nota">Toque numa modalidade para ver todas as atléticas e os adversários mais prováveis.</p>`,
+  );
+}
+
+export function analise(ctx) {
+  if (!ctx.pode.editar) {
+    return `${cabecalho('Análise', 'Só para a equipe', { voltar: { href: '#/inicio', texto: 'Início' } })}
+      <div class="painel formulario">
+        <p>A análise e a previsão são só para quem entrou com uma conta da equipe.</p>
+        ${ctx.usuario ? '' : '<div class="acoes"><button type="button" class="botao" data-acao="entrar">Entrar com Google</button></div>'}
+      </div>`;
+  }
+  const lista = relatorios(ctx);
+  const atletas = Object.values(ctx.analises || {}).find((d) => d?.tipo === 'atletas');
+  const textos = lista.length ? secao('Relatórios', lista.map((r, i) => blocoRelatorio(r, i === 0)).join('')) : '';
+  return `${cabecalho('Análise', 'Só a equipe vê esta página', { voltar: { href: '#/inicio', texto: 'Início' } })}
+    ${blocoNossasChances(ctx)}
+    ${textos}
+    ${atletas ? blocoAtletas(ctx, atletas) : ''}
+    ${!lista.length && !atletas ? vazio('Ainda não há relatórios nem destaques de atletas.') : ''}`;
 }
 
 // ---------- Ajustes ----------

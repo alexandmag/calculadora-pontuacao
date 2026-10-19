@@ -174,6 +174,11 @@ export const cliques = {
   'resumo-dia': soEditor((el) => folhaResumo({ dia: el.dataset.data || '' })),
   'aba-jogos': (el) => mudarTela({ abaJogos: el.dataset.aba }),
   'modo-geral': (el) => mudarTela({ modoGeral: el.dataset.modo }),
+  'ver-previsao': () => {
+    Object.assign(app.ui, { modoGeral: 'previsao' });
+    salvarPreferencias();
+    location.hash = '#/geral';
+  },
   exportar: exportarBackup,
   entrar,
   sair,

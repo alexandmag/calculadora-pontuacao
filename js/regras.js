@@ -89,7 +89,9 @@ export function placarEfetivo(jogo, esporte) {
     return { a: venceA ? v : p, b: venceA ? p : v };
   }
   if (!Number.isFinite(r.a) || !Number.isFinite(r.b)) return null;
-  return { a: r.a, b: r.b, parciais: normalizarParciais(r.parciais), penaltis: r.penaltis || null };
+  // totais: pontos somados de todos os sets, quando só se sabe o total (o site oficial mostra assim).
+  const totais = r.totais && Number.isFinite(r.totais.a) && Number.isFinite(r.totais.b) ? r.totais : null;
+  return { a: r.a, b: r.b, parciais: normalizarParciais(r.parciais), totais, penaltis: r.penaltis || null };
 }
 
 // 'a', 'b', 'empate' ou null (jogo sem resultado). Fora dos grupos o empate se decide nos pênaltis.
@@ -140,6 +142,11 @@ function somarJogo(linhas, jogo, esporte) {
         B.pro += y;
         B.contra += x;
       }
+    } else if (p.totais) {
+      A.pro += p.totais.a;
+      A.contra += p.totais.b;
+      B.pro += p.totais.b;
+      B.contra += p.totais.a;
     }
     if (p.a !== p.b) {
       const [ganha, perde] = p.a > p.b ? [A, B] : [B, A];
@@ -150,7 +157,7 @@ function somarJogo(linhas, jogo, esporte) {
       ganha.pts += pv;
       perde.pts += pp;
     }
-    return { semParciais: !temParciais };
+    return { semParciais: !temParciais && !p.totais };
   }
   A.pro += p.a;
   A.contra += p.b;
@@ -226,10 +233,11 @@ function valeParaTabela(jogo, eliminados) {
 }
 
 // Tabela de um grupo com a pontuação e os critérios de desempate do esporte (Anexo 1).
-export function tabelaGrupo(membros, jogos, esporte, eliminados = new Set()) {
+// fase: 'grupo' ou 'repescagem' (a repescagem também é disputada em grupo, todos contra todos).
+export function tabelaGrupo(membros, jogos, esporte, eliminados = new Set(), fase = 'grupo') {
   const linhas = Object.fromEntries(membros.map((id) => [id, linhaVazia(id)]));
   const validos = jogos.filter(
-    (j) => j.fase === 'grupo' && linhas[j.a] && linhas[j.b] && placarEfetivo(j, esporte) && valeParaTabela(j, eliminados),
+    (j) => j.fase === fase && linhas[j.a] && linhas[j.b] && placarEfetivo(j, esporte) && valeParaTabela(j, eliminados),
   );
   let semParciais = false;
   for (const j of validos) semParciais = somarJogo(linhas, j, esporte).semParciais || semParciais;
@@ -292,7 +300,7 @@ function indiceCampanha(l) {
   return [l.pts / l.j, (l.pro - l.contra) / l.j, l.pro / l.j];
 }
 
-function compararCampanha(x, y) {
+export function compararCampanha(x, y) {
   const a = indiceCampanha(x);
   const b = indiceCampanha(y);
   for (let i = 0; i < a.length; i++) if (b[i] !== a[i]) return b[i] - a[i];
@@ -303,7 +311,7 @@ function compararCampanha(x, y) {
 // disputa de 3º lugar), seguindo a regra usada pela CO:
 // - a final define campeã e vice;
 // - na semifinal, quem perdeu para a campeã é 3º e quem perdeu para a vice é 4º;
-// - quem perdeu a repescagem vem logo depois; se houver mais de um, na ordem de quem os eliminou;
+// - quem não venceu a repescagem (disputada em grupo) vem logo depois, na ordem da tabela da repescagem;
 // - quem não passou dos grupos é ordenado pela posição no grupo e depois pela campanha;
 // - enquanto uma fase não termina, quem segue vivo é ordenado pela campanha nos grupos (projeção).
 // vagasDiretas: quantos de cada grupo vão direto para a semifinal (1 com repescagem, 2 sem). Assim
@@ -332,13 +340,46 @@ export function classificacaoColetiva({ grupos, jogos, esporte, vagasDiretas = 0
 
   const etapa = {};
   const eliminadaPor = {};
-  const mataMata = jogos
-    .filter((j) => ORDEM_FASES.includes(j.fase) && j.fase !== 'grupo' && j.a && j.b)
-    .sort((x, y) => ORDEM_FASES.indexOf(x.fase) - ORDEM_FASES.indexOf(y.fase));
-  const faseFinalComecou = mataMata.length > 0;
+  const posRepescagem = {};
+  const naFase = (fase) => jogos.filter((j) => j.fase === fase && j.a && j.b);
+  const repescagem = naFase('repescagem');
+  const mataMata = [...naFase('semifinal'), ...naFase('final')];
+  const faseFinalComecou = repescagem.length > 0 || mataMata.length > 0;
   for (const id of participantes) {
     etapa[id] = faseFinalComecou && (posGrupo[id] ?? 99) <= vagasDiretas ? ETAPA.semifinalista : ETAPA.grupos;
   }
+
+  // Repescagem: no site da CO é uma tabela, todos contra todos entre quem chegou nela (os 2º colocados).
+  // O líder vai à semifinal; os outros param ali, na ordem da tabela. Com dois times é um jogo só.
+  let tabelaRepescagem = null;
+  if (repescagem.length) {
+    const membros = [...new Set(repescagem.flatMap((j) => [j.a, j.b]))].filter((id) => !eliminados.has(id));
+    if (membros.length === 2) {
+      const [x, y] = membros;
+      const v = vencedor(repescagem[0], esporte);
+      for (const lado of ['a', 'b']) {
+        const id = repescagem[0][lado];
+        const situacao = v === null || v === 'empate' ? 'pendente' : v === lado ? 'venceu' : 'perdeu';
+        etapa[id] = etapaNoJogo('repescagem', situacao);
+        if (situacao === 'perdeu') posRepescagem[id] = 2;
+      }
+      tabelaRepescagem = tabelaGrupo([x, y], jogos, esporte, eliminados, 'repescagem');
+    } else {
+      tabelaRepescagem = tabelaGrupo(membros, jogos, esporte, eliminados, 'repescagem');
+      const jogaram = (x, y) => repescagem.some((j) => ((j.a === x && j.b === y) || (j.a === y && j.b === x)) && placarEfetivo(j, esporte));
+      const completa = membros.every((x, i) => membros.slice(i + 1).every((y) => jogaram(x, y)));
+      for (const l of tabelaRepescagem.tabela) {
+        if (!l.posicao) continue;
+        if (!completa) etapa[l.id] = ETAPA.naRepescagem;
+        else if (l.posicao === 1) etapa[l.id] = ETAPA.semifinalista;
+        else {
+          etapa[l.id] = ETAPA.repescagem;
+          posRepescagem[l.id] = l.posicao;
+        }
+      }
+    }
+  }
+
   for (const j of mataMata) {
     const v = vencedor(j, esporte);
     for (const lado of ['a', 'b']) {
@@ -355,6 +396,7 @@ export function classificacaoColetiva({ grupos, jogos, esporte, vagasDiretas = 0
   const lugar = {};
   const desempate = (x, y) => {
     if (etapa[x] === ETAPA.grupos && (posGrupo[x] ?? 99) !== (posGrupo[y] ?? 99)) return (posGrupo[x] ?? 99) - (posGrupo[y] ?? 99);
+    if (etapa[x] === ETAPA.repescagem && (posRepescagem[x] ?? 99) !== (posRepescagem[y] ?? 99)) return (posRepescagem[x] ?? 99) - (posRepescagem[y] ?? 99);
     const porQuemX = lugar[eliminadaPor[x]] ?? Infinity;
     const porQuemY = lugar[eliminadaPor[y]] ?? Infinity;
     if (porQuemX !== porQuemY) return porQuemX - porQuemY;
@@ -379,7 +421,7 @@ export function classificacaoColetiva({ grupos, jogos, esporte, vagasDiretas = 0
 
   const final = jogos.find((j) => j.fase === 'final');
   const encerrada = Boolean(final && ['a', 'b'].includes(vencedor(final, esporte)));
-  return { ordem, tabelas, wo, encerrada };
+  return { ordem, tabelas, tabelaRepescagem, wo, encerrada };
 }
 
 function compararPorColocacoes(x, y) {

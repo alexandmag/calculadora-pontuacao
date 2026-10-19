@@ -7,7 +7,7 @@ const PREFERENCIAS = 'placar-interpuc-preferencias';
 
 function lerPreferencias() {
   // nossaLocal: atlética destacada neste aparelho ('' = a padrão da equipe).
-  const padrao = { soNossos: true, abaJogos: 'abertos', modJogos: '', modoGeral: 'projecao', nossaLocal: '', formatoResumo: 'imagem' };
+  const padrao = { soNossos: true, abaJogos: 'abertos', modJogos: '', modoGeral: 'conquistados', nossaLocal: '', formatoResumo: 'imagem' };
   try {
     return { ...padrao, ...JSON.parse(localStorage.getItem(PREFERENCIAS) || '{}') };
   } catch {
@@ -24,6 +24,7 @@ export const app = {
   erroConexao: null,
   usuario: null, // { uid, email, nome } de quem entrou com Google
   equipe: null, // { admins: [e-mails], editores: [e-mails] }
+  analises: {}, // relatórios e destaques de atletas (só a equipe lê)
   dono: false,
   semAcesso: false,
   pode: { editar: false, administrar: false, papel: 'visitante' },

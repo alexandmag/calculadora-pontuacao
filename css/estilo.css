@@ -547,10 +547,6 @@ ol.painel {
   font-size: 0.75rem;
 }
 
-.selo-projecao {
-  border: 1px solid var(--bronze);
-  color: var(--bronze);
-}
 
 .filtros {
   display: flex;
@@ -1749,6 +1745,170 @@ button.item-punicao:hover {
   .cabecalho-prova span:last-child {
     display: none;
   }
+}
+
+/* ---------- Previsão e análise (só a equipe) ---------- */
+
+.selo-encerrada {
+  border: 1px solid var(--vitoria);
+  color: var(--vitoria);
+}
+
+.placar-frase strong {
+  color: var(--placar-bronze);
+}
+
+.cartao-analise {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 14px 16px;
+  border-left: 4px solid var(--bronze);
+  color: inherit;
+  text-decoration: none;
+}
+
+.cartao-analise:hover {
+  background: var(--superficie-2);
+}
+
+.cartao-analise-titulo {
+  font-weight: 700;
+}
+
+.cartao-analise-sub {
+  color: var(--tinta-suave);
+  font-size: 0.88rem;
+}
+
+.tabela-previsao th,
+.tabela-previsao td {
+  padding-inline: 4px;
+}
+
+.tabela-previsao td {
+  font-size: 0.95rem;
+}
+
+.tabela-previsao th {
+  letter-spacing: 0.02em;
+}
+
+.tabela-previsao .nome {
+  min-width: 5.5rem;
+  padding-left: 12px;
+}
+
+.tabela-previsao .nome small {
+  display: block;
+  color: var(--tinta-suave);
+  font-size: 0.75rem;
+}
+
+.tabela tr.eliminada td {
+  color: var(--tinta-suave);
+  text-decoration: line-through;
+}
+
+.caminho {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: var(--raio-pequeno);
+  background: var(--bronze-fundo);
+  font-size: 0.9rem;
+}
+
+.relatorio + .relatorio,
+.atletas-mod + .atletas-mod {
+  margin-top: 10px;
+}
+
+.relatorio summary,
+.atletas-mod summary {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 14px 16px;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.relatorio-resumo {
+  color: var(--tinta-suave);
+  font-size: 0.88rem;
+  font-weight: 400;
+}
+
+.relatorio-corpo {
+  display: grid;
+  gap: 14px;
+  padding: 0 16px 16px;
+  border-top: 1px solid var(--linha);
+}
+
+.relatorio-secao h3 {
+  margin: 14px 0 6px;
+  font-size: 1rem;
+}
+
+.relatorio-secao p,
+.relatorio-secao ul {
+  margin: 0 0 8px;
+  line-height: 1.5;
+}
+
+.relatorio-secao ul {
+  padding-left: 20px;
+}
+
+.relatorio-secao li + li {
+  margin-top: 4px;
+}
+
+.rankings {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+  padding: 0 16px 16px;
+}
+
+.ranking h4 {
+  margin: 0 0 6px;
+  color: var(--tinta-suave);
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.lista-ranking {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.lista-ranking li {
+  display: grid;
+  grid-template-columns: 2.2rem minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 0;
+  border-top: 1px solid var(--linha);
+}
+
+.lista-ranking li:first-child {
+  border-top: 0;
+}
+
+.lista-ranking .valor {
+  font-family: var(--fonte-numero);
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+.lista-ranking .reticencias {
+  display: block;
+  color: var(--tinta-suave);
+  text-align: center;
 }
 
 /* ---------- Aviso rápido ---------- */
