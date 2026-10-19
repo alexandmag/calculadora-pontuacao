@@ -25,8 +25,10 @@ individuais e a classificação geral das 13 atléticas, seguindo o regulamento 
 
 ### Previsão e análise (só a equipe)
 
-- O app estima a força de cada atlética em cada coletiva pelo saldo dos jogos e simula 1.000 vezes o que falta, no formato da CO. Mostra, por modalidade, a chance de liderar o grupo, ir à repescagem, chegar à semifinal, à final e ser campeã, os pontos esperados na geral e os adversários mais prováveis. Com poucos jogos a incerteza é grande; a cada rodada fica mais firme.
-- A previsão da geral soma os pontos já conquistados com os esperados nas coletivas em andamento. Modalidades sem resultado ainda (provas, lutas, xadrez, peteca) não entram.
+- O app simula 1.000 vezes tudo o que falta. Nas coletivas, a força de cada atlética parte do resultado de 2025 e é corrigida pelo saldo dos jogos de 2026; os jogos que faltam são sorteados no formato da CO. Nas modalidades ainda sem resultado (provas, lutas, raquetes, xadrez, peteca), a colocação é sorteada a partir de 2025, com bastante incerteza. Mostra, por modalidade, a chance de liderar o grupo, ir à repescagem, chegar à semifinal, à final e ser campeã, os pontos esperados na geral e os adversários mais prováveis. Com poucos jogos a incerteza é grande; a cada rodada fica mais firme.
+- A previsão da geral soma os pontos já conquistados com os esperados em todas as modalidades que faltam.
+- **Cenários** (Geral → Previsão e Análise): pessimista, realista e otimista para a atlética destacada. Cada um é a média de um quinto das simulações (as 20% piores para ela, as 20% do meio e as 20% melhores), com a geral nesse cenário e as modalidades onde mais muda.
+- **Edição 2025** ([`js/historico.js`](js/historico.js)): pontos de cada atlética em cada modalidade na classificação final de 2025 (boletins oficiais nº 12, 13 e 17). Aparece na Análise e nas tabelas de previsão. Suposições: Vikings RI = Vikings ICS; Vetich = Veterinária e Ursal juntas.
 - **Análise** (link no Início): relatórios escritos e os rankings de atletas do site oficial (artilheiros, cestinhas...), guardados em `edicoes/2026/analises`, que só a equipe lê.
 - Quem só acompanha vê resultados, grupos e pontos conquistados, sem previsão.
 
@@ -132,6 +134,7 @@ Roda os testes das regras de pontuação.
 | `js/modelo.js` | Junta os dados lançados com as regras e calcula tabelas e classificações |
 | `js/armazenamento.js` | Firebase (compartilhado, com login) ou armazenamento do aparelho (local) |
 | `js/permissoes.js` | Quem pode editar e administrar, a partir do login e da equipe |
+| `js/historico.js` | Classificação final da edição de 2025, por modalidade (ponto de partida da previsão) |
 | `js/previsao.js` | Previsão das coletivas: força pelo saldo e simulação do resto do campeonato (testada em `tests/`) |
 | `js/resumo.js` | Dados do resumo do dia e o PDF (o gerador, jsPDF, só é baixado quando alguém pede um PDF) |
 | `js/resumo-imagem.js` | Resumo do dia em imagem PNG, desenhada no navegador |

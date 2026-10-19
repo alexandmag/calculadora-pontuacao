@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { montarModelo } from '../js/modelo.js';
-import { estimarForcas, PARAMETROS, preverCompeticao } from '../js/previsao.js';
+import { cenarios, estimarForcas, PARAMETROS, preverCompeticao } from '../js/previsao.js';
 import { ESPORTES } from '../js/regras.js';
 
 const vazio = () => ({ config: { geral: { nossa: 'eng' } }, modalidades: {}, jogos: {}, resultados: {}, penalidades: {} });
@@ -61,7 +61,26 @@ test('previsão: modalidade encerrada não é simulada e seus pontos já contam'
     jogo('basquete-f', 'eng', 'odo', { a: 30, b: 20 }, { fase: 'final', grupo: null }),
   ]));
   const prev = preverCompeticao(montarModelo(estado), { simulacoes: 50 });
-  assert.deepEqual(prev.simuladas, []);
-  assert.equal(prev.geral.find((l) => l.id === 'eng').esperados, 12);
-  assert.equal(prev.geral[0].id, 'eng');
+  assert.ok(!prev.simuladas.includes('basquete-f'));
+  assert.equal(prev.geral.find((l) => l.id === 'eng').atuais, 12);
+});
+
+test('modalidade sem resultado: quem foi bem em 2025 tende a ir bem de novo, mas sem certeza', () => {
+  const prev = preverCompeticao(montarModelo(vazio()), { simulacoes: 600 });
+  const natacao = prev.modalidades['natacao-m'];
+  // Em 2025 a Engenharia foi campeã da natação masculina e a Ajac não pontuou.
+  assert.ok(natacao.eng.titulo > 0.3, `título ${natacao.eng.titulo}`);
+  assert.ok(natacao.eng.titulo < 0.9, 'não é certeza');
+  assert.ok(natacao.eng.pontos > natacao.com.pontos);
+  assert.equal(natacao.eng.tipo, 'historico');
+  assert.equal(Math.round(Object.values(natacao).reduce((s, c) => s + c.titulo, 0) * 1000), 1000);
+});
+
+test('cenários: o otimista tem mais pontos e mais chance de título que o realista, e este que o pessimista', () => {
+  const prev = preverCompeticao(montarModelo(basquete()), { simulacoes: 500 });
+  const c = cenarios(prev, 'eng');
+  assert.ok(c.otimista.pontos > c.realista.pontos && c.realista.pontos > c.pessimista.pontos);
+  assert.ok(c.otimista.titulo >= c.realista.titulo && c.realista.titulo >= c.pessimista.titulo);
+  assert.ok(c.otimista.posicao <= c.pessimista.posicao);
+  assert.equal(c.realista.tabela.length, 13);
 });

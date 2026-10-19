@@ -6,6 +6,8 @@ import { ATLETICAS, FASES, LOGO, MODALIDADE, MODALIDADES } from './dados.js';
 import { ESPORTES, NOME_ETAPA, ORDEM_FASES, placarEfetivo, pontosPorColocacao, vencedor } from './regras.js';
 import { TIPOS_PUNICAO } from './modelo.js';
 import { PAPEIS, normalizarEmail } from './permissoes.js';
+import { EDICAO_2025, colocacao2025 } from './historico.js';
+import { cenarios } from './previsao.js';
 import { comSinal, dataCurta, dataLonga, esc, inteiro, pts } from './util.js';
 
 const NOME_FASE = Object.fromEntries(FASES.map((f) => [f.id, f.nome]));
@@ -415,7 +417,8 @@ function itemModalidade(ctx, info) {
   const nossa = info.vigente.find((l) => ehNossa(ctx, l.id) && l.posicao);
   // Para a equipe, enquanto não há colocação, a chance de chegar à semifinal.
   const chance = !nossa && ctx.pode.editar && ctx.modelo.nossa ? ctx.previsao?.modalidades[info.m.id]?.[ctx.modelo.nossa] : null;
-  const lado = nossa ? `<span class="mod-nossa">Nós: ${nossa.posicao}º</span>` : chance && !chance.eliminada ? `<span class="mod-nossa">Semi: ${pct(chance.semi)}</span>` : '';
+  let lado = nossa ? `<span class="mod-nossa">Nós: ${nossa.posicao}º</span>` : '';
+  if (!lado && chance && !chance.eliminada) lado = `<span class="mod-nossa">${chance.tipo === 'jogos' ? `Semi: ${pct(chance.semi)}` : `Pódio: ${pct(chance.podio)}`}</span>`;
   return `<li><a class="mod" href="#/m/${info.m.id}">
       <span class="mod-texto"><span class="mod-nome">${esc(info.m.nome)}</span><span class="mod-sub">${resumoModalidade(info)}</span></span>
       <span class="mod-lado">${seloEstado(info)}${lado}</span>
@@ -668,13 +671,14 @@ function blocoPrevisao(ctx, info) {
   if (!ctx.previsao) return secao('Previsão', '<p class="nota">Calculando a previsão…</p>');
   const dados = ctx.previsao.modalidades[info.m.id];
   if (!dados) return '';
+  if (Object.values(dados)[0]?.tipo === 'historico') return blocoPrevisaoHistorico(ctx, info, dados);
   const grupoDe = Object.fromEntries(Object.entries(info.grupos).flatMap(([letra, membros]) => membros.map((id) => [id, letra])));
   const comRepescagem = Boolean(info.m.repescagem);
   const linhas = Object.entries(dados)
     .sort((x, y) => y[1].pontos - x[1].pontos || y[1].titulo - x[1].titulo)
     .map(
       ([id, c]) => `<tr class="${classeNossa(ctx, id).trim()}${c.eliminada ? ' eliminada' : ''}">
-        <td class="nome">${nome(ctx, id)}<small>Grupo ${esc(grupoDe[id] || '?')}</small></td>
+        <td class="nome">${nome(ctx, id)}<small>Grupo ${esc(grupoDe[id] || '?')}${colocacao2025(id, info.m.id) ? ` · 2025: ${colocacao2025(id, info.m.id)}º` : ''}</small></td>
         <td>${pct(c.lider)}</td>
         ${comRepescagem ? `<td>${pct(c.repescagem)}</td>` : ''}
         <td>${pct(c.semi)}</td><td>${pct(c.final)}</td><td class="destaque">${pct(c.titulo)}</td>
@@ -697,7 +701,31 @@ function blocoPrevisao(ctx, info) {
       <thead><tr><th class="nome" scope="col">Atlética</th><th scope="col" title="Terminar em 1º no grupo">Líder</th>${comRepescagem ? '<th scope="col" title="Ir para a repescagem">Rep.</th>' : ''}<th scope="col">Semi</th><th scope="col">Final</th><th scope="col">Título</th><th scope="col" title="Pontos esperados na geral">Pts</th></tr></thead>
       <tbody>${linhas}</tbody>
     </table></div>
-    <p class="nota">Simulação de ${ctx.previsao.simulacoes.toLocaleString('pt-BR')} campeonatos com os resultados até agora: a força de cada atlética sai dos placares (saldo), com muita incerteza enquanto há poucos jogos. Pts são os pontos esperados na geral. Só a equipe vê esta parte.</p>`,
+    <p class="nota">Simulação de ${ctx.previsao.simulacoes.toLocaleString('pt-BR')} campeonatos com os resultados até agora: a força de cada atlética parte do resultado de 2025 e é corrigida pelos placares (saldo), com muita incerteza enquanto há poucos jogos. Pts são os pontos esperados na geral. Só a equipe vê esta parte.</p>`,
+  );
+}
+
+// Modalidade ainda sem resultado: previsão pela edição de 2025 (só a equipe).
+function blocoPrevisaoHistorico(ctx, info, dados) {
+  const linhas = Object.entries(dados)
+    .sort((x, y) => y[1].pontos - x[1].pontos || y[1].titulo - x[1].titulo)
+    .map(([id, c]) => {
+      const em2025 = colocacao2025(id, info.m.id);
+      return `<tr class="${classeNossa(ctx, id).trim()}">
+        <td class="nome">${nome(ctx, id)}</td>
+        <td>${em2025 ? `${em2025}º` : '—'}</td>
+        <td class="destaque">${pct(c.titulo)}</td><td>${pct(c.podio)}</td>
+        <td>${c.pontos.toFixed(1).replace('.', ',')}</td>
+      </tr>`;
+    })
+    .join('');
+  return secao(
+    'Previsão',
+    `<div class="tabela-rolagem painel"><table class="tabela tabela-previsao">
+      <thead><tr><th class="nome" scope="col">Atlética</th><th scope="col" title="Colocação em 2025">2025</th><th scope="col">Título</th><th scope="col" title="Terminar entre as 3 primeiras">Pódio</th><th scope="col" title="Pontos esperados na geral">Pts</th></tr></thead>
+      <tbody>${linhas}</tbody>
+    </table></div>
+    <p class="nota">Ainda sem resultado em 2026: a previsão parte da classificação de 2025 nesta modalidade e da força de cada atlética no conjunto das individuais, com bastante incerteza (muita gente entrou e saiu). Quando os resultados forem lançados, valem eles. Só a equipe vê esta parte.</p>`,
   );
 }
 
@@ -713,9 +741,9 @@ export function modalidade(ctx, id) {
     return `${topo}${avisoPeteca}${blocoPrevisao(ctx, info)}${blocoGrupos(ctx, info)}${blocoFinais(ctx, info)}${blocoClassificacao(ctx, info)}${blocoPunicoes(ctx, info)}`;
   }
   if (m.tipo === 'provas') {
-    return `${topo}${blocoProvas(ctx, info)}${blocoPontosProvas(ctx, info)}${blocoClassificacao(ctx, info)}${blocoPunicoes(ctx, info)}`;
+    return `${topo}${blocoPrevisao(ctx, info)}${blocoProvas(ctx, info)}${blocoPontosProvas(ctx, info)}${blocoClassificacao(ctx, info)}${blocoPunicoes(ctx, info)}`;
   }
-  return `${topo}${blocoClassificacao(ctx, info)}${blocoPunicoes(ctx, info)}`;
+  return `${topo}${blocoPrevisao(ctx, info)}${blocoClassificacao(ctx, info)}${blocoPunicoes(ctx, info)}`;
 }
 
 // ---------- Geral ----------
@@ -723,7 +751,7 @@ export function modalidade(ctx, id) {
 function tabelaPrevisaoGeral(ctx) {
   const { previsao } = ctx;
   if (!previsao) return vazio('Calculando a previsão…');
-  if (!previsao.simuladas.length) return vazio('Nenhuma coletiva em andamento para simular: a classificação já é a dos pontos conquistados.');
+  if (!previsao.simuladas.length) return vazio('Todas as modalidades já têm colocação: a classificação é a dos pontos conquistados.');
   const linhas = previsao.geral
     .map(
       (l) => `<tr class="${classeNossa(ctx, l.id).trim()}">
@@ -735,7 +763,7 @@ function tabelaPrevisaoGeral(ctx) {
       </tr>`,
     )
     .join('');
-  const coletivas = previsao.simuladas.map((id) => MODALIDADE[id].curto).join(', ');
+
   return `<div class="tabela-rolagem painel"><table class="tabela tabela-geral tabela-previsao">
       <thead><tr>
         <th class="pos" scope="col">#</th><th class="nome" scope="col">Atlética</th><th scope="col" title="Pontos esperados">Pts</th>
@@ -743,7 +771,7 @@ function tabelaPrevisaoGeral(ctx) {
       </tr></thead>
       <tbody>${linhas}</tbody>
     </table></div>
-    <p class="nota">Pontos já conquistados mais a média de ${previsao.simulacoes.toLocaleString('pt-BR')} simulações das coletivas em andamento (${esc(coletivas)}). Faixa: 8 em cada 10 simulações terminam dentro dela. Ainda não entram as modalidades sem resultado (provas, lutas, xadrez, peteca), que podem mudar bastante a briga. Só a equipe vê a previsão.</p>`;
+    <p class="nota">Pontos já conquistados mais a média de ${previsao.simulacoes.toLocaleString('pt-BR')} simulações de tudo o que falta: ${previsao.porJogos.length} coletivas jogo a jogo e ${previsao.porHistorico.length} modalidades ainda sem resultado (provas, lutas, raquetes, xadrez, peteca) pelo histórico de 2025. Faixa: 8 em cada 10 simulações terminam dentro dela. Só a equipe vê a previsão.</p>`;
 }
 
 export function geral(ctx) {
@@ -758,7 +786,7 @@ export function geral(ctx) {
       </div>
     </div>`;
   const sub = `${ctx.modelo.comPontos} de ${TOTAL_MODALIDADES} modalidades com pontos · ${ctx.modelo.oficiais} oficiais`;
-  if (modo === 'previsao') return `${cabecalho('Classificação geral', sub)}${botoes}${tabelaPrevisaoGeral(ctx)}`;
+  if (modo === 'previsao') return `${cabecalho('Classificação geral', sub)}${botoes}${blocoCenarios(ctx)}${secao('Média das simulações', tabelaPrevisaoGeral(ctx))}`;
   const lista = ctx.modelo.geral[modo];
   const temPerdas = lista.some((l) => l.perdas);
   const linhas = lista
@@ -817,7 +845,8 @@ export function atletica(ctx, id) {
         .filter((mod) => prev.modalidades[mod][id])
         .map((mod) => {
           const c = prev.modalidades[mod][id];
-          const texto = c.eliminada ? 'Fora por W.O.' : `semi ${pct(c.semi)} · final ${pct(c.final)} · título ${pct(c.titulo)}`;
+          let texto = c.eliminada ? 'Fora por W.O.' : `semi ${pct(c.semi)} · final ${pct(c.final)} · título ${pct(c.titulo)}`;
+          if (c.tipo === 'historico') texto = `título ${pct(c.titulo)} · pódio ${pct(c.podio)} · pelo histórico de 2025`;
           return `<li><a class="mod" href="#/m/${mod}">
               <span class="mod-texto"><span class="mod-nome">${esc(MODALIDADE[mod].nome)}</span><span class="mod-sub">${texto}</span></span>
               <span class="mod-lado"><span class="valor">${c.pontos.toFixed(1).replace('.', ',')}<small> pts</small></span></span>
@@ -831,7 +860,7 @@ export function atletica(ctx, id) {
       ${naGeral ? `<div><dt>Previsão</dt><dd>${naGeral.posicao}º <small>${Math.round(naGeral.esperados)} pts</small></dd></div>` : `<div><dt>Só oficiais</dt><dd>${posicaoGeral(ofic, ctx.modelo.geral.oficial)} <small>${pts(ofic.total)}</small></dd></div>`}
     </dl>
     ${secao('Pontos por modalidade', porMod ? `<ul class="painel lista-mod">${porMod}</ul>` : vazio(`Nenhuma colocação definida ainda. ${NOTA_GRUPOS}`))}
-    ${previsaoMods ? secao('Previsão nas coletivas', `<ul class="painel lista-mod">${previsaoMods}</ul><p class="nota">Pontos esperados na geral em cada coletiva. Só a equipe vê.</p>`) : ''}
+    ${previsaoMods ? secao('Previsão por modalidade', `<ul class="painel lista-mod">${previsaoMods}</ul><p class="nota">Pontos esperados na geral em cada modalidade que ainda não terminou. Só a equipe vê.</p>`) : ''}
     ${perdas ? secao('Perdas', `<ul class="painel lista-punicoes">${perdas}</ul>`) : ''}`;
 }
 
@@ -886,26 +915,118 @@ function blocoNossasChances(ctx) {
   const { previsao, modelo } = ctx;
   if (!modelo.nossa) return '';
   if (!previsao) return secao('Nossas chances', vazio('Calculando a previsão…'));
-  const linhas = previsao.simuladas
-    .map((mod) => [mod, previsao.modalidades[mod][modelo.nossa]])
-    .filter(([, c]) => c)
-    .sort((x, y) => y[1].pontos - x[1].pontos)
-    .map(
-      ([mod, c]) => `<tr>
-        <td class="nome"><a href="#/m/${mod}">${esc(MODALIDADE[mod].curto)}</a></td>
-        <td>${c.eliminada ? '—' : pct(c.semi)}</td><td>${c.eliminada ? '—' : pct(c.final)}</td><td class="destaque">${c.eliminada ? '—' : pct(c.titulo)}</td>
-        <td>${c.pontos.toFixed(1).replace('.', ',')}</td>
-      </tr>`,
-    )
-    .join('');
-  if (!linhas) return '';
+  const minha = (lista) =>
+    lista
+      .map((mod) => [mod, previsao.modalidades[mod][modelo.nossa]])
+      .filter(([, c]) => c)
+      .sort((x, y) => y[1].pontos - x[1].pontos);
+  const ptsTd = (c) => `<td>${c.pontos.toFixed(1).replace('.', ',')}</td>`;
+  const soma = (lista) => lista.reduce((s, [, c]) => s + c.pontos, 0).toFixed(0);
+  const coletivas = minha(previsao.porJogos);
+  const individuais = minha(previsao.porHistorico);
+  const tabelaColetivas = coletivas.length
+    ? `<h3>Coletivas · ${soma(coletivas)} pts esperados</h3>
+      <div class="tabela-rolagem painel"><table class="tabela tabela-previsao">
+        <thead><tr><th class="nome" scope="col">Modalidade</th><th scope="col">Semi</th><th scope="col">Final</th><th scope="col">Título</th><th scope="col" title="Pontos esperados na geral">Pts</th></tr></thead>
+        <tbody>${coletivas
+          .map(
+            ([mod, c]) => `<tr>
+              <td class="nome"><a href="#/m/${mod}">${esc(MODALIDADE[mod].curto)}</a></td>
+              <td>${c.eliminada ? '—' : pct(c.semi)}</td><td>${c.eliminada ? '—' : pct(c.final)}</td><td class="destaque">${c.eliminada ? '—' : pct(c.titulo)}</td>${ptsTd(c)}
+            </tr>`,
+          )
+          .join('')}</tbody>
+      </table></div>`
+    : '';
+  const tabelaIndividuais = individuais.length
+    ? `<h3>Sem resultado ainda (pelo histórico de 2025) · ${soma(individuais)} pts esperados</h3>
+      <div class="tabela-rolagem painel"><table class="tabela tabela-previsao">
+        <thead><tr><th class="nome" scope="col">Modalidade</th><th scope="col" title="Colocação em 2025">2025</th><th scope="col">Título</th><th scope="col">Pódio</th><th scope="col" title="Pontos esperados na geral">Pts</th></tr></thead>
+        <tbody>${individuais
+          .map(([mod, c]) => {
+            const em2025 = colocacao2025(modelo.nossa, mod);
+            return `<tr>
+              <td class="nome"><a href="#/m/${mod}">${esc(MODALIDADE[mod].curto)}</a></td>
+              <td>${em2025 ? `${em2025}º` : '—'}</td><td class="destaque">${pct(c.titulo)}</td><td>${pct(c.podio)}</td>${ptsTd(c)}
+            </tr>`;
+          })
+          .join('')}</tbody>
+      </table></div>`
+    : '';
+  if (!tabelaColetivas && !tabelaIndividuais) return '';
   return secao(
     `Chances de ${modelo.nomes[modelo.nossa]}`,
+    `<div class="blocos-chances">${tabelaColetivas}${tabelaIndividuais}</div>
+    <p class="nota">Toque numa modalidade para ver todas as atléticas e, nas coletivas, os adversários mais prováveis.</p>`,
+  );
+}
+
+// Cenários (só a equipe): pessimista, realista e otimista para a atlética destacada.
+const CENARIOS = [
+  ['pessimista', 'Pessimista', '20% piores simulações para nós'],
+  ['realista', 'Realista', '20% do meio: o mais provável'],
+  ['otimista', 'Otimista', '20% melhores simulações para nós'],
+];
+
+function blocoCenarios(ctx) {
+  const { previsao, modelo } = ctx;
+  if (!modelo.nossa || !ctx.pode.editar) return '';
+  if (!previsao) return secao('Cenários', vazio('Calculando a previsão…'));
+  const c = cenarios(previsao, modelo.nossa);
+  if (!c || !previsao.simuladas.length) return '';
+  const realista = Object.fromEntries(c.realista.porMod.map((x) => [x.mod, x.pontos]));
+  const um = (x) => (Math.abs(x) >= 10 ? String(Math.round(x)) : x.toFixed(1).replace('.', ','));
+  const cartao = ([chave, titulo, explicacao]) => {
+    const cen = c[chave];
+    const topo = cen.tabela.slice(0, 4);
+    if (!topo.some((l) => l.id === modelo.nossa)) topo.push(cen.tabela.find((l) => l.id === modelo.nossa));
+    let muda = '';
+    if (chave !== 'realista') {
+      const sinal = chave === 'otimista' ? 1 : -1;
+      const diferencas = cen.porMod
+        .map((x) => ({ mod: x.mod, d: x.pontos - realista[x.mod] }))
+        .filter((x) => x.d * sinal >= 1)
+        .sort((x, y) => (y.d - x.d) * sinal)
+        .slice(0, 4)
+        .map((x) => `${esc(MODALIDADE[x.mod].curto)} ${x.d > 0 ? '+' : '−'}${um(Math.abs(x.d))}`);
+      if (diferencas.length) muda = `<p class="cenario-muda"><strong>Onde muda:</strong> ${diferencas.join(', ')}</p>`;
+    }
+    return `<article class="painel cenario cenario-${chave}">
+        <header><h3>${titulo}</h3><span>${explicacao}</span></header>
+        <p class="cenario-numeros"><strong>${cen.tabela.findIndex((l) => l.id === modelo.nossa) + 1}º</strong> <span>${Math.round(cen.pontos)} pts</span></p>
+        <p class="cenario-titulo">Título geral: <strong>${pct(cen.titulo)}</strong></p>
+        <ol class="cenario-geral">${topo.map((l) => `<li class="${classeNossa(ctx, l.id).trim()}"><span>${nome(ctx, l.id)}</span><span>${Math.round(l.pontos)}</span></li>`).join('')}</ol>
+        ${muda}
+      </article>`;
+  };
+  return secao(
+    `Cenários de ${modelo.nomes[modelo.nossa]}`,
+    `<div class="cenarios">${CENARIOS.map(cartao).join('')}</div>
+    <p class="nota">Cada cenário é a média de um quinto das simulações, separadas pelos pontos que fazemos nelas. A posição e a lista são a geral pela média de pontos nesse grupo de simulações. "Onde muda" compara com o realista.</p>`,
+  );
+}
+
+// Edição passada (só a equipe): a classificação final de 2025, separando coletivas e individuais.
+function blocoEdicao2025(ctx) {
+  const ids = new Set(ATLETICAS.map((a) => a.id));
+  const linhas = EDICAO_2025.linhas
+    .map((l, i) => {
+      const nomes2026 = l.ids.filter((id) => ids.has(id)).map((id) => nome(ctx, id)).join(' e ');
+      const nossa = l.ids.includes(ctx.modelo.nossa);
+      return `<tr class="${nossa ? 'nos' : ''}">
+        <td class="pos">${i + 1}º</td>
+        <td class="nome">${esc(l.nome)}${nomes2026 && nomes2026.toLowerCase() !== esc(l.nome).toLowerCase() ? `<small>hoje: ${nomes2026}</small>` : ''}</td>
+        <td class="destaque">${inteiro(l.total)}</td><td>${l.coletivas}</td><td>${l.individuais}</td>${l.perdas ? `<td class="texto-alerta">${comSinal(l.perdas)}</td>` : '<td></td>'}
+      </tr>`;
+    })
+    .join('');
+  return secao(
+    'Edição 2025',
     `<div class="tabela-rolagem painel"><table class="tabela tabela-previsao">
-      <thead><tr><th class="nome" scope="col">Modalidade</th><th scope="col">Semi</th><th scope="col">Final</th><th scope="col">Título</th><th scope="col" title="Pontos esperados na geral">Pts</th></tr></thead>
+      <thead><tr><th class="pos" scope="col">#</th><th class="nome" scope="col">Atlética</th><th scope="col">Total</th><th scope="col" title="Futsal, futebol, handebol, basquete e vôlei">Colet.</th><th scope="col" title="Provas, lutas, raquetes, xadrez e peteca">Indiv.</th><th scope="col" title="Perdas por W.O.">W.O.</th></tr></thead>
       <tbody>${linhas}</tbody>
     </table></div>
-    <p class="nota">Toque numa modalidade para ver todas as atléticas e os adversários mais prováveis.</p>`,
+    <p class="nota">Classificação final de 2025 (${esc(EDICAO_2025.fonte)}). "Vetich" era Veterinária e Ursal juntas; em 2026 cada uma recebe o histórico da Vetich. A previsão usa esses números como ponto de partida, com cautela: muita gente entrou e saiu.</p>`,
   );
 }
 
@@ -921,10 +1042,11 @@ export function analise(ctx) {
   const atletas = Object.values(ctx.analises || {}).find((d) => d?.tipo === 'atletas');
   const textos = lista.length ? secao('Relatórios', lista.map((r, i) => blocoRelatorio(r, i === 0)).join('')) : '';
   return `${cabecalho('Análise', 'Só a equipe vê esta página', { voltar: { href: '#/inicio', texto: 'Início' } })}
+    ${blocoCenarios(ctx)}
     ${blocoNossasChances(ctx)}
     ${textos}
     ${atletas ? blocoAtletas(ctx, atletas) : ''}
-    ${!lista.length && !atletas ? vazio('Ainda não há relatórios nem destaques de atletas.') : ''}`;
+    ${blocoEdicao2025(ctx)}`;
 }
 
 // ---------- Ajustes ----------

@@ -403,3 +403,18 @@ test('geral: empate total fica marcado para sorteio', () => {
   assert.equal(geral[1].empatado, true);
   assert.equal(geral[2].empatado, false, 'quem não pontuou não aparece como empatado');
 });
+
+test('histórico 2025: totais iguais aos do boletim oficial nº 17', async () => {
+  const { EDICAO_2025, colocacao2025 } = await import('../js/historico.js');
+  assert.deepEqual(
+    EDICAO_2025.linhas.map((l) => [l.nome, l.total]),
+    [
+      ['Touros', 175], ['Direito', 162], ['Medicina', 141], ['Engenharia', 118], ['Vikings Gerenciais', 102], ['Manada', 79],
+      ['Alfa', 64], ['Pinguins', 62], ['Ajac', 49], ['Vikings RI', 37], ['Raptors', 16], ['Vetich', 3],
+    ],
+  );
+  assert.equal(colocacao2025('eng', 'handebol-m'), 1);
+  assert.equal(colocacao2025('med', 'atletismo-f'), 1);
+  assert.equal(colocacao2025('psi', 'natacao-m'), 8);
+  assert.equal(colocacao2025('com', 'natacao-m'), null);
+});

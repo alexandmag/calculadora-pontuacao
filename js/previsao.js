@@ -14,6 +14,7 @@
 // Jogos e fases já lançados entram como aconteceram. Puro (sem DOM): testado em tests/previsao.test.mjs.
 
 import { MODALIDADES } from './dados.js';
+import { COLETIVAS_PRINCIPAIS, pontos2025 } from './historico.js';
 import { placarEfetivo, pontosPorColocacao, vencedor } from './regras.js';
 
 // forca: quanto as atléticas costumam diferir; ruido: quanto um jogo foge do esperado; pontos: média de
@@ -31,6 +32,16 @@ export const PARAMETROS = {
 // 1.000 campeonatos: a chance de 50% sai com erro de uns 1,5 ponto percentual e o cálculo leva menos de
 // um segundo no celular.
 export const SIMULACOES = 1000;
+
+// Quanto a edição de 2025 pesa. Nas coletivas, o ponto de partida da força: a campeã de 2025 começa
+// cerca de uma força-padrão acima da média, e os jogos de 2026 corrigem isso. Nas modalidades sem jogos
+// (provas, lutas, raquetes, xadrez, peteca), a colocação é sorteada a partir de 2025 com correlação de
+// uns 0,6 entre um ano e o outro: muita gente sai e entra de um ano para o outro.
+const PESO_2025_COLETIVAS = 0.45;
+const PESO_2025_INDIVIDUAIS = 0.6;
+const RUIDO_INDIVIDUAIS = 0.75;
+// "Ano bom ou ruim" de cada atlética nas individuais, sorteado uma vez por simulação e somado em todas.
+const FASE_INDIVIDUAIS = 0.35;
 
 // ---------- números aleatórios reproduzíveis (a mesma previsão a cada vez que a tela é desenhada) ----------
 
@@ -96,13 +107,13 @@ function margem(jogo, esporte) {
   return p.a - p.b;
 }
 
-// Estimativa "regularizada": cada força começa em zero e os saldos a empurram. Devolve a média e a
-// raiz da covariância, para sortear forças coerentes entre si.
-export function estimarForcas(times, jogos, esporte, par) {
+// Estimativa "regularizada": cada força começa no ponto de partida (zero, ou o que 2025 sugere) e os
+// saldos a empurram. Devolve a média e a raiz da covariância, para sortear forças coerentes entre si.
+export function estimarForcas(times, jogos, esporte, par, { partida = null } = {}) {
   const n = times.length;
   const idx = Object.fromEntries(times.map((id, i) => [id, i]));
   const precisao = Array.from({ length: n }, (_, i) => Array.from({ length: n }, (_, k) => (i === k ? 1 / par.forca ** 2 : 0)));
-  const b = new Array(n).fill(0);
+  const b = times.map((id) => (partida?.[id] ?? 0) / par.forca ** 2);
   const w = 1 / par.ruido ** 2;
   const teto = 2.5 * par.ruido; // goleada diz que um é forte e o outro fraco, mas não mais que isso
   for (const j of jogos) {
@@ -249,7 +260,11 @@ function prepararModalidade(info, zerados) {
   const par = { ...base };
   if (!esporte.sets && reais.length) par.pontos = (reais.reduce((s, r) => s + r.pa + r.pb, 0) / reais.length / 2 + base.pontos) / 2;
   const porFase = (fase) => info.jogos.filter((j) => j.fase === fase && j.a && j.b);
+  // Ponto de partida pela edição passada: quem foi bem em 2025 começa um pouco acima da média.
+  const z = padronizar(times.map((id) => pontos2025(id, info.m.id)));
+  const partida = Object.fromEntries(times.map((id, i) => [id, PESO_2025_COLETIVAS * par.forca * z[i]]));
   return {
+    tipo: 'jogos',
     mod: info.m.id,
     esporte,
     par,
@@ -257,7 +272,7 @@ function prepararModalidade(info, zerados) {
     grupos,
     eliminados,
     times,
-    forcas: estimarForcas(times, info.jogos, esporte, par),
+    forcas: estimarForcas(times, info.jogos, esporte, par, { partida }),
     grupo: porFase('grupo'),
     jogosRepescagem: porFase('repescagem'),
     semis: porFase('semifinal'),
@@ -389,40 +404,87 @@ function simularModalidade(p, rng) {
   };
 }
 
+// ---------- modalidades sem jogos: pelo histórico de 2025 ----------
+
+function padronizar(valores) {
+  const n = valores.length || 1;
+  const media = valores.reduce((s, x) => s + x, 0) / n;
+  const desvio = Math.sqrt(valores.reduce((s, x) => s + (x - media) ** 2, 0) / n) || 1;
+  return valores.map((x) => (x - media) / desvio);
+}
+
+const INDIVIDUAIS = MODALIDADES.map((m) => m.id).filter((id) => !COLETIVAS_PRINCIPAIS.includes(id));
+
+// A nota de cada atlética mistura o resultado de 2025 nesta modalidade (65%) com a força dela no
+// conjunto (35%): quem é forte nas individuais tende a ser forte em várias.
+function prepararPorHistorico(mod, ids, zerados) {
+  const individual = INDIVIDUAIS.includes(mod);
+  const conjunto = individual ? INDIVIDUAIS : COLETIVAS_PRINCIPAIS;
+  const daMod = padronizar(ids.map((id) => pontos2025(id, mod)));
+  const doConjunto = padronizar(ids.map((id) => conjunto.reduce((s, m) => s + pontos2025(id, m), 0) / conjunto.length));
+  const base = padronizar(ids.map((_, i) => 0.65 * daMod[i] + 0.35 * doConjunto[i]));
+  return {
+    tipo: 'historico',
+    mod,
+    times: ids,
+    individual,
+    base: Object.fromEntries(ids.map((id, i) => [id, base[i]])),
+    eliminados: new Set(),
+    zerado: (id) => zerados.has(`${mod}|${id}`),
+  };
+}
+
+function simularPorHistorico(p, rng, fase) {
+  const notas = p.times.map((id) => ({
+    id,
+    nota: PESO_2025_INDIVIDUAIS * p.base[id] + (p.individual ? fase[id] : 0) + RUIDO_INDIVIDUAIS * normal(rng),
+  }));
+  return { ordem: notas.sort((x, y) => y.nota - x.nota).map((n) => n.id) };
+}
+
 // ---------- o campeonato todo ----------
 
-const nomeDaChance = ['lider', 'repescagem', 'semi', 'final', 'titulo'];
+const nomeDaChance = ['lider', 'repescagem', 'semi', 'final', 'titulo', 'podio'];
 
-// Modalidades que entram na simulação: coletivas com grupos montados que ainda não têm colocação.
+// Modalidades que entram na simulação: todas as que ainda não têm colocação. Coletivas com grupos
+// montados são simuladas jogo a jogo; as outras, pelo histórico de 2025.
 export function modalidadesPrevisiveis(modelo) {
-  return MODALIDADES.filter((m) => {
-    const info = modelo.modalidades[m.id];
-    return m.tipo === 'coletiva' && !info.vigente.length && Object.keys(info.grupos || {}).length > 0;
-  }).map((m) => m.id);
+  return MODALIDADES.filter((m) => !modelo.modalidades[m.id].vigente.length).map((m) => m.id);
 }
+
+const porJogos = (modelo, id) => {
+  const info = modelo.modalidades[id];
+  return info.m.tipo === 'coletiva' && Object.keys(info.grupos || {}).length > 0;
+};
 
 export function preverCompeticao(modelo, { simulacoes = SIMULACOES, semente = 20261017 } = {}) {
   const rng = geradorAleatorio(semente);
   const ids = modelo.geral.conquistados.map((l) => l.id);
   const atuais = Object.fromEntries(modelo.geral.conquistados.map((l) => [l.id, l.total]));
-  const mods = modalidadesPrevisiveis(modelo).map((id) => prepararModalidade(modelo.modalidades[id], modelo.zerados));
+  const mods = modalidadesPrevisiveis(modelo).map((id) =>
+    porJogos(modelo, id) ? prepararModalidade(modelo.modalidades[id], modelo.zerados) : prepararPorHistorico(id, ids, modelo.zerados),
+  );
+  const nMods = mods.length;
 
   const porMod = {};
   for (const p of mods) {
     porMod[p.mod] = Object.fromEntries(
-      p.times.map((id) => [id, { pontos: 0, colocacoes: [], lider: 0, repescagem: 0, semi: 0, final: 0, titulo: 0, rivalSemi: {}, rivalFinal: {} }]),
+      p.times.map((id) => [id, { pontos: 0, colocacoes: [], lider: 0, repescagem: 0, semi: 0, final: 0, titulo: 0, podio: 0, rivalSemi: {}, rivalFinal: {} }]),
     );
   }
   const somaTotal = Object.fromEntries(ids.map((id) => [id, 0]));
   const amostras = Object.fromEntries(ids.map((id) => [id, new Float64Array(simulacoes)]));
+  // Pontos de cada atlética em cada modalidade simulada, simulação a simulação (para os cenários).
+  const pontosSim = Object.fromEntries(ids.map((id) => [id, new Float32Array(simulacoes * nMods)]));
   const primeiroGeral = Object.fromEntries(ids.map((id) => [id, 0]));
   const podioGeral = Object.fromEntries(ids.map((id) => [id, 0]));
   const posicaoGeral = Object.fromEntries(ids.map((id) => [id, 0]));
 
   for (let s = 0; s < simulacoes; s++) {
     const total = { ...atuais };
-    for (const p of mods) {
-      const r = simularModalidade(p, rng);
+    const fase = Object.fromEntries(ids.map((id) => [id, FASE_INDIVIDUAIS * normal(rng)]));
+    mods.forEach((p, j) => {
+      const r = p.tipo === 'jogos' ? simularModalidade(p, rng) : simularPorHistorico(p, rng, fase);
       const conta = porMod[p.mod];
       r.ordem.forEach((id, i) => {
         const c = conta[id];
@@ -430,13 +492,16 @@ export function preverCompeticao(modelo, { simulacoes = SIMULACOES, semente = 20
         const pts = p.zerado(id) ? 0 : pontosPorColocacao(i + 1);
         c.pontos += pts;
         c.colocacoes[i] = (c.colocacoes[i] || 0) + 1;
+        if (i < 3) c.podio++;
         total[id] += pts;
+        if (pontosSim[id]) pontosSim[id][s * nMods + j] = pts;
       });
+      if (r.ordem[0] && conta[r.ordem[0]]) conta[r.ordem[0]].titulo++;
+      if (p.tipo !== 'jogos') return;
       for (const id of r.lideres) if (conta[id]) conta[id].lider++;
       for (const id of r.repescagem) if (conta[id]) conta[id].repescagem++;
       for (const id of r.semi) if (conta[id]) conta[id].semi++;
       for (const id of r.final) if (conta[id]) conta[id].final++;
-      if (r.ordem[0] && conta[r.ordem[0]]) conta[r.ordem[0]].titulo++;
       // Contra quem cada uma jogou a semifinal e a final nesta simulação.
       const anotar = (par, campo) => {
         const [x, y] = par;
@@ -445,7 +510,7 @@ export function preverCompeticao(modelo, { simulacoes = SIMULACOES, semente = 20
       };
       r.paresSemi.forEach((par) => anotar(par, 'rivalSemi'));
       if (r.parFinal) anotar(r.parFinal, 'rivalFinal');
-    }
+    });
     // Posição na geral desta simulação (empate em pontos: sorteio, aproximando o desempate do Art. 15).
     const fila = ids.map((id) => ({ id, t: total[id], sorte: rng() })).sort((x, y) => y.t - x.t || x.sorte - y.sorte);
     fila.forEach((l, i) => {
@@ -465,6 +530,7 @@ export function preverCompeticao(modelo, { simulacoes = SIMULACOES, semente = 20
       Object.entries(porMod[p.mod]).map(([id, c]) => [
         id,
         {
+          tipo: p.tipo,
           pontos: c.pontos / simulacoes,
           colocacoes: Array.from({ length: p.times.length }, (_, i) => (c.colocacoes[i] || 0) / simulacoes),
           ...Object.fromEntries(nomeDaChance.map((k) => [k, c[k] / simulacoes])),
@@ -493,7 +559,51 @@ export function preverCompeticao(modelo, { simulacoes = SIMULACOES, semente = 20
     .sort((x, y) => y.esperados - x.esperados || x.posicaoMedia - y.posicaoMedia)
     .map((l, i) => ({ ...l, posicao: i + 1 }));
 
-  return { simulacoes, modalidades, geral, simuladas: mods.map((p) => p.mod) };
+  return {
+    simulacoes,
+    modalidades,
+    geral,
+    simuladas: mods.map((p) => p.mod),
+    porJogos: mods.filter((p) => p.tipo === 'jogos').map((p) => p.mod),
+    porHistorico: mods.filter((p) => p.tipo !== 'jogos').map((p) => p.mod),
+    amostras,
+    pontosSim,
+  };
+}
+
+// ---------- cenários ----------
+
+// Cenários para uma atlética, a partir das próprias simulações: o pessimista é a média dos 20% piores
+// campeonatos para ela, o otimista a dos 20% melhores e o realista a dos 20% do meio (o mais provável).
+// Para cada um: pontos, posição média, chance de título, a geral daquele cenário e o que muda em cada
+// modalidade.
+export function cenarios(previsao, id, { fatia = 0.2 } = {}) {
+  const total = previsao?.amostras?.[id];
+  if (!total || !previsao.simulacoes) return null;
+  const n = previsao.simulacoes;
+  const k = Math.max(1, Math.round(n * fatia));
+  const ordem = Array.from({ length: n }, (_, i) => i).sort((x, y) => total[x] - total[y]);
+  const meio = Math.floor((n - k) / 2);
+  const faixas = { pessimista: ordem.slice(0, k), realista: ordem.slice(meio, meio + k), otimista: ordem.slice(n - k) };
+  const ids = Object.keys(previsao.amostras);
+  const nMods = previsao.simuladas.length;
+
+  const resumo = (sims) => {
+    const media = (lista) => lista.reduce((s, x) => s + x, 0) / sims.length;
+    const pontos = Object.fromEntries(ids.map((x) => [x, media(sims.map((s) => previsao.amostras[x][s]))]));
+    let titulos = 0;
+    let somaPosicao = 0;
+    for (const s of sims) {
+      let acima = 0;
+      for (const x of ids) if (x !== id && previsao.amostras[x][s] > total[s]) acima++;
+      somaPosicao += acima + 1;
+      if (!acima) titulos++;
+    }
+    const tabela = ids.map((x) => ({ id: x, pontos: pontos[x] })).sort((x, y) => y.pontos - x.pontos);
+    const porMod = previsao.simuladas.map((mod, j) => ({ mod, pontos: media(sims.map((s) => previsao.pontosSim[id][s * nMods + j])) }));
+    return { pontos: pontos[id], posicao: somaPosicao / sims.length, titulo: titulos / sims.length, tabela, porMod };
+  };
+  return Object.fromEntries(Object.entries(faixas).map(([nome, sims]) => [nome, resumo(sims)]));
 }
 
 // O modelo é refeito a cada mudança; a previsão de um mesmo modelo é calculada uma vez só.

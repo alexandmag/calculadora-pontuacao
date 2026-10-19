@@ -1911,6 +1911,112 @@ button.item-punicao:hover {
   text-align: center;
 }
 
+/* Cenários (pessimista, realista, otimista) */
+
+.cenarios {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 10px;
+}
+
+.cenario {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 16px;
+  border-top: 4px solid var(--tinta-suave);
+}
+
+.cenario-pessimista {
+  border-top-color: var(--derrota);
+}
+
+.cenario-realista {
+  border-top-color: var(--bronze);
+}
+
+.cenario-otimista {
+  border-top-color: var(--vitoria);
+}
+
+.cenario header h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.cenario header span {
+  color: var(--tinta-suave);
+  font-size: 0.78rem;
+}
+
+.cenario-numeros {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin: 0;
+  font-family: var(--fonte-numero);
+}
+
+.cenario-numeros strong {
+  font-size: 2.4rem;
+  line-height: 1;
+}
+
+.cenario-numeros span {
+  color: var(--tinta-suave);
+  font-size: 1.2rem;
+  font-weight: 600;
+}
+
+.cenario-titulo,
+.cenario-muda {
+  margin: 0;
+  font-size: 0.88rem;
+}
+
+.cenario-geral {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: cenario;
+  font-size: 0.88rem;
+}
+
+.cenario-geral li {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 3px 0;
+  border-top: 1px solid var(--linha);
+}
+
+.cenario-geral li:first-child {
+  border-top: 0;
+}
+
+.cenario-geral li.nos {
+  font-weight: 700;
+  color: var(--bronze);
+}
+
+.cenario-geral li span:last-child {
+  font-family: var(--fonte-numero);
+  font-weight: 600;
+}
+
+.blocos-chances {
+  display: grid;
+  gap: 8px;
+}
+
+.blocos-chances h3 {
+  margin: 8px 0 0;
+  color: var(--tinta-suave);
+  font-size: 0.78rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
 /* ---------- Aviso rápido ---------- */
 
 .aviso {
