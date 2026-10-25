@@ -26,17 +26,20 @@ function resultadosPossiveis(esporte, mataMata) {
   if (esporte.sets) {
     const [v0, p0] = esporte.pontosSets.semPerderSet;
     const [v1, p1] = esporte.pontosSets.comSetPerdido;
+    // Saldo de pontos do time A no jogo (lo a hi): 2×0 é pelo menos +4 (cada set por 2 ou mais); no
+    // 2×1 pode dar qualquer coisa.
     return [
-      { r: 'a', fino: 'v20', pa: v0, pb: p0 },
-      { r: 'a', fino: 'v21', pa: v1, pb: p1 },
-      { r: 'b', fino: 'd12', pa: p1, pb: v1 },
-      { r: 'b', fino: 'd02', pa: p0, pb: v0 },
+      { r: 'a', fino: 'v20', pa: v0, pb: p0, lo: 4, hi: Infinity },
+      { r: 'a', fino: 'v21', pa: v1, pb: p1, lo: -Infinity, hi: Infinity },
+      { r: 'b', fino: 'd12', pa: p1, pb: v1, lo: -Infinity, hi: Infinity },
+      { r: 'b', fino: 'd02', pa: p0, pb: v0, lo: -Infinity, hi: -4 },
     ];
   }
+  // Saldo de gols do time A: vitória soma pelo menos 1, empate não muda nada, derrota tira pelo menos 1.
   const { vitoria, empate = 0, derrota = 0 } = esporte.pontos;
-  const lista = [{ r: 'a', fino: 'v', pa: vitoria, pb: derrota }];
-  if (!esporte.semEmpate && !mataMata) lista.push({ r: 'e', fino: 'e', pa: empate, pb: empate });
-  lista.push({ r: 'b', fino: 'd', pa: derrota, pb: vitoria });
+  const lista = [{ r: 'a', fino: 'v', pa: vitoria, pb: derrota, lo: 1, hi: Infinity }];
+  if (!esporte.semEmpate && !mataMata) lista.push({ r: 'e', fino: 'e', pa: empate, pb: empate, lo: 0, hi: 0 });
+  lista.push({ r: 'b', fino: 'd', pa: derrota, pb: vitoria, lo: -Infinity, hi: -1 });
   return lista;
 }
 
@@ -123,6 +126,11 @@ export function analisarGrupo({ membros, jogos, esporte, eliminados = new Set(),
   const vit = new Int32Array(m);
   const basePts = ativos.map((id) => linhas[id].pts);
   const baseVit = ativos.map((id) => linhas[id].v);
+  const baseSaldo = ativos.map((id) => linhas[id].pro - linhas[id].contra);
+  const sMin = new Float64Array(m);
+  const sMax = new Float64Array(m);
+  // Os critérios logo depois de pontos e vitórias são o saldo (todos os esportes).
+  const saldoDesempata = esporte.desempate[0] === 'vitorias' && esporte.desempate[1] === 'saldo';
   for (let c = 0; c < total; c++) {
     if (c > 0) {
       // Próxima combinação, como um hodômetro.
@@ -134,6 +142,8 @@ export function analisarGrupo({ membros, jogos, esporte, eliminados = new Set(),
     for (let t = 0; t < m; t++) {
       pts[t] = basePts[t];
       vit[t] = baseVit[t];
+      sMin[t] = baseSaldo[t];
+      sMax[t] = baseSaldo[t];
     }
     for (let g = 0; g < n; g++) {
       const o = opcoes[escolha[g]];
@@ -141,32 +151,39 @@ export function analisarGrupo({ membros, jogos, esporte, eliminados = new Set(),
       pts[ib[g]] += o.pb;
       if (o.r === 'a') vit[ia[g]]++;
       else if (o.r === 'b') vit[ib[g]]++;
+      sMin[ia[g]] += o.lo;
+      sMax[ia[g]] += o.hi;
+      sMin[ib[g]] -= o.hi;
+      sMax[ib[g]] -= o.lo;
     }
     for (let t = 0; t < m; t++) {
+      // Quem fica à frente com certeza, quem pode ficar à frente ou atrás, e quem fica atrás.
       let acima = 0;
-      let iguais = 0;
+      let incertos = 0;
+      const fixos = [];
       for (let o = 0; o < m; o++) {
         if (o === t) continue;
         if (pts[o] > pts[t] || (pts[o] === pts[t] && vit[o] > vit[t])) acima++;
-        else if (pts[o] === pts[t] && vit[o] === vit[t]) iguais++;
+        else if (pts[o] !== pts[t] || vit[o] !== vit[t]) continue;
+        // Iguais em pontos e vitórias: o saldo de cada um é uma faixa; se não se cruzam, já decide.
+        else if (saldoDesempata && sMin[o] > sMax[t]) acima++;
+        else if (saldoDesempata && sMax[o] < sMin[t]) continue;
+        else if (!restantes[t] && !restantes[o]) fixos.push(o);
+        else incertos++;
       }
       let melhor = acima + 1;
-      let pior = acima + iguais + 1;
-      if (iguais && !restantes[t]) {
-        const empatados = [];
-        for (let o = 0; o < m; o++) if (o !== t && pts[o] === pts[t] && vit[o] === vit[t]) empatados.push(o);
-        const terminados = [t, ...empatados.filter((o) => !restantes[o])].map((o) => ativos[o]);
-        if (terminados.length > 1) {
-          const abertos = iguais + 1 - terminados.length;
-          let antes = 0;
-          for (const bloco of ordemEntre(terminados)) {
-            if (bloco.includes(ativos[t])) {
-              melhor = acima + antes + 1;
-              pior = acima + antes + bloco.length + abertos;
-              break;
-            }
-            antes += bloco.length;
+      let pior = acima + incertos + fixos.length + 1;
+      // Saldo igual entre quem já jogou tudo: o resto do desempate (confronto, gols...) é exato, desde
+      // que ninguém mais possa entrar no empate.
+      if (fixos.length && !incertos) {
+        let antes = 0;
+        for (const bloco of ordemEntre([t, ...fixos].map((o) => ativos[o]))) {
+          if (bloco.includes(ativos[t])) {
+            melhor = acima + antes + 1;
+            pior = acima + antes + bloco.length;
+            break;
           }
+          antes += bloco.length;
         }
       }
       const mascara = faixa[melhor][pior];
@@ -247,13 +264,14 @@ function juntar(linhas, nJogos) {
 }
 
 // Em que caso cai uma combinação dos próprios jogos: semifinal garantida, pelo menos a repescagem
-// garantida, fora com certeza ou depende (de outros jogos ou do saldo).
+// garantida, fora com certeza ou depende (de outros jogos ou do saldo), separando o "depende" pelos
+// destinos ainda possíveis.
 function classe(destinos) {
   if (destinos.length === 1 && destinos[0] !== 'repescagem') return destinos[0];
   if (destinos.includes('repescagem') && !destinos.includes('fora')) return 'repescagem';
-  return 'depende';
+  return `depende:${destinos.join('+')}`;
 }
-const CLASSES = ['semi', 'repescagem', 'fora', 'depende'];
+const CLASSES = ['semi', 'repescagem', 'depende:semi+repescagem+fora', 'depende:semi+fora', 'depende:repescagem+fora', 'fora'];
 
 // O que dá cada combinação dos próprios jogos, juntando as que caem no mesmo caso (semifinal
 // garantida, repescagem garantida, fora ou depende): é o que a tela mostra, como "semifinal garantida
@@ -299,7 +317,8 @@ function casos(t, padroes, jogosDoTime, faltam) {
       }
     }
     return {
-      classe: c,
+      classe: c.split(':')[0],
+      destinos: doBit(dela.reduce((mascara, l) => mascara | l.destinos.reduce((x, d) => x | BIT[d], 0), 0)),
       exato: c === 'repescagem' ? dela.every((l) => l.destinos.length === 1) : true,
       opcoes: linhas.map((l) => condicoes(l.conds)),
       saldo: dela.some((l) => l.saldo),
@@ -373,7 +392,10 @@ export function veredito(sit, t, chances) {
   const direta = chances ? (sit.repescagem ? chances.lider : chances.semi) : null;
   if (direta !== null && direta >= PROVAVEL) return { categoria: 'semi', motivo: 'provavel' };
   if (chances && chances.semi < REMOTA && (!sit.repescagem || chances.repescagem < REMOTA)) return { categoria: 'fora', motivo: 'praticamente' };
-  if (sit.repescagem && (t.possiveis || []).includes('repescagem')) return { categoria: 'repescagem', motivo: t.destino === 'repescagem' ? 'garantida' : 'briga' };
+  if (sit.repescagem && (t.possiveis || []).includes('repescagem')) {
+    const motivo = t.destino === 'repescagem' ? 'garantida' : t.possiveis.includes('fora') ? 'briga' : 'pelo-menos';
+    return { categoria: 'repescagem', motivo };
+  }
   return { categoria: 'briga', motivo: 'briga' };
 }
 

@@ -971,7 +971,7 @@ function blocoNossasChances(ctx) {
 
 const CATEGORIAS = [
   ['semi', 'Vão à semifinal'],
-  ['repescagem', 'Na briga pela repescagem'],
+  ['repescagem', 'Caminho pela repescagem'],
   ['briga', 'Na briga pela vaga'],
   ['fora', 'Fora'],
 ];
@@ -1023,7 +1023,8 @@ function textoCondicoes(ctx, condicoes) {
 function textoOpcoes(ctx, opcoes) {
   const mostradas = opcoes.slice(0, 2).map((o) => textoCondicoes(ctx, o));
   const resto = opcoes.length - mostradas.length;
-  return `${mostradas.join('; ou ')}${resto ? `; ou outra${resto > 1 ? 's' : ''} ${resto} combinaç${resto > 1 ? 'ões' : 'ão'}` : ''}`;
+  const mais = resto > 1 ? `; ou outras ${resto} combinações` : resto ? '; ou outra combinação' : '';
+  return `${mostradas.join('; ou ')}${mais}`;
 }
 
 const textoJogo = (ctx, j) => `${nome(ctx, j.a)} × ${nome(ctx, j.b)}`;
@@ -1039,24 +1040,25 @@ function textoTorcida(ctx, d) {
   );
 }
 
-// "depende de Touros × Vinkão (ajuda: Touros não vencer Vinkão) e do saldo"
-function textoDepende(ctx, caso) {
-  const jogos = caso.depende.slice(0, 3).map((d) => {
-    const torcida = textoTorcida(ctx, d);
-    return torcida ? `${textoJogo(ctx, d.jogo)} (ajuda: ${torcida})` : textoJogo(ctx, d.jogo);
-  });
-  if (caso.depende.length > 3) jogos.push('outros jogos');
-  if (!jogos.length) return caso.saldo ? 'do saldo' : 'de outros resultados';
-  return `de ${juntarE(jogos)}${caso.saldo ? ' e do saldo' : ''}`;
-}
-
 // Quando a repescagem está garantida mas a semifinal direta ainda pode vir: "se Touros não vencer
-// Vinkão (ou pelo saldo)" ou "conforme Touros × Vinkão e o saldo".
+// Vinkão (ou pelo saldo)" ou "conforme Touros × Vinkão e o saldo". Também serve para "repescagem ou
+// fora, conforme...".
 function textoSobe(ctx, caso) {
   const torcidas = caso.depende.map((d) => textoTorcida(ctx, d));
   if (caso.depende.length && torcidas.every(Boolean) && caso.depende.length <= 2) return `se ${juntarE(torcidas)}${caso.saldo ? ' (ou pelo saldo)' : ''}`;
   if (!caso.depende.length) return caso.saldo ? 'pelo saldo' : 'conforme os outros jogos';
   return `conforme ${juntarE(caso.depende.slice(0, 3).map((d) => textoJogo(ctx, d.jogo)))}${caso.saldo ? ' e o saldo' : ''}`;
+}
+
+// "conforme Touros × Vinkão (ajuda: Touros não vencer Vinkão) e o saldo"
+function textoConforme(ctx, caso) {
+  const jogos = caso.depende.slice(0, 3).map((d) => {
+    const torcida = textoTorcida(ctx, d);
+    return torcida ? `${textoJogo(ctx, d.jogo)} (ajuda: ${torcida})` : textoJogo(ctx, d.jogo);
+  });
+  if (caso.depende.length > 3) jogos.push('outros jogos');
+  if (!jogos.length) return caso.saldo ? 'conforme o saldo' : 'conforme os outros resultados';
+  return `conforme ${juntarE(jogos)}${caso.saldo ? ' e o saldo' : ''}`;
 }
 
 // Chance de cair num caso e, nele, de ir à semifinal (das simulações, pelas mesmas combinações).
@@ -1072,11 +1074,12 @@ function chanceDoCaso(chances, caso) {
 }
 
 function linhaCaso(ctx, o, caso, simulacoes) {
-  const ch = chanceDoCaso(o.chances, caso);
+  const semFaltar = !o.t.faltam.length;
+  // Sem jogo a fazer não há o que sortear: a chance do caso não se aplica.
+  const ch = semFaltar ? null : chanceDoCaso(o.chances, caso);
   const prob = ch && simulacoes ? ` <small>chance ${pct(ch.p / simulacoes)}</small>` : '';
   const semiDentro = ch?.semi !== null && ch?.semi !== undefined ? ` <small>semifinal em ${pct(ch.semi)} desses casos</small>` : '';
   const se = textoOpcoes(ctx, caso.opcoes);
-  const semFaltar = !o.t.faltam.length;
   if (caso.classe === 'semi') return `<li class="caso caso-semi"><strong>Semifinal garantida</strong>${semFaltar ? '' : ` se ${se}`}.${prob}</li>`;
   if (caso.classe === 'fora') return `<li class="caso caso-fora"><strong>Fora</strong>${semFaltar ? '' : ` se ${se}`}.${prob}</li>`;
   if (caso.classe === 'repescagem') {
@@ -1084,8 +1087,10 @@ function linhaCaso(ctx, o, caso, simulacoes) {
     const extra = caso.exato ? '' : `; vai direto à semifinal ${textoSobe(ctx, caso)}`;
     return `<li class="caso caso-repescagem"><strong>${titulo}</strong>${semFaltar ? '' : ` se ${se}`}${extra}.${prob}${caso.exato ? '' : semiDentro}</li>`;
   }
-  const outros = o.t.resumo.length > 1 ? 'Nos outros casos' : semFaltar ? 'Já jogou tudo' : 'Em qualquer resultado';
-  return `<li class="caso caso-depende"><strong>${outros}</strong>, depende ${textoDepende(ctx, caso)}.${o.t.resumo.length > 1 ? prob : ''}${semiDentro}</li>`;
+  const quando = semFaltar ? 'Já jogou tudo' : caso.opcoes.every((c) => !c.length) ? 'Em qualquer resultado' : `Se ${se}`;
+  const destinos = caso.destinos.map((d) => ({ semi: 'semifinal', repescagem: 'repescagem', fora: 'fora' })[d]);
+  const destinosTexto = destinos.length > 1 ? `${destinos.slice(0, -1).join(', ')} ou ${destinos[destinos.length - 1]}` : destinos[0];
+  return `<li class="caso caso-depende"><strong>${quando}</strong>: ${destinosTexto}, ${textoConforme(ctx, caso)}.${o.t.resumo.length > 1 ? prob : ''}${semiDentro}</li>`;
 }
 
 // Selo do veredito: "Classificada", "Provável · 81%", "Repescagem 40%", "Eliminada"...
@@ -1094,6 +1099,7 @@ function seloVeredito(o) {
   const direta = c ? (o.sit.repescagem ? c.lider : c.semi) : null;
   const textos = {
     garantida: o.categoria === 'repescagem' ? 'Repescagem garantida' : 'Classificada',
+    'pelo-menos': 'Pelo menos repescagem',
     provavel: `Provável · ${pct(direta || 0)}`,
     'na-semi': 'Na semifinal',
     'na-final': 'Na final',
@@ -1150,7 +1156,7 @@ function cartaoObjetivo(ctx, o, { titulo = true } = {}) {
     ? `<p class="objetivo-numeros">${o.sit.repescagem ? `Liderar ${pct(c.lider)} · Repescagem ${pct(c.repescagem)} · ` : ''}Semifinal ${pct(c.semi)} · Final ${pct(c.final)} · Título ${pct(c.titulo)}</p>`
     : '';
   const naFase = ['na-semi', 'na-final', 'parou-semi', 'final-jogada', 'na-repescagem', 'perdeu-repescagem'].includes(o.motivo);
-  const casos = !naFase && o.motivo !== 'wo' && o.motivo !== 'eliminada' && t.resumo?.length
+  const casos = !naFase && !['wo', 'eliminada', 'garantida'].includes(o.motivo) && t.resumo?.length
     ? `<ul class="objetivo-casos">${t.resumo.map((caso) => linhaCaso(ctx, o, caso, ctx.previsao?.simulacoes)).join('')}</ul>`
     : '';
   const motivoFora = o.motivo === 'eliminada' && !naFase ? `<p class="objetivo-numeros">Não alcança mais ${o.sit.repescagem ? 'o 2º lugar do grupo' : 'os dois primeiros do grupo'}.</p>` : '';
