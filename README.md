@@ -26,6 +26,7 @@ individuais e a classificação geral das 13 atléticas, seguindo o regulamento 
 ### Previsão e análise (só a equipe)
 
 - O app simula 1.000 vezes tudo o que falta. Nas coletivas, a força de cada atlética parte do resultado de 2025 e é corrigida pelo saldo dos jogos de 2026; os jogos que faltam são sorteados no formato da CO. Nas modalidades ainda sem resultado (provas, lutas, raquetes, xadrez, peteca), a colocação é sorteada a partir de 2025, com bastante incerteza. Mostra, por modalidade, a chance de liderar o grupo, ir à repescagem, chegar à semifinal, à final e ser campeã, os pontos esperados na geral e os adversários mais prováveis. Com poucos jogos a incerteza é grande; a cada rodada fica mais firme.
+- **Previsão objetiva** (Análise, com um resumo no Início e na página de cada coletiva): separa as coletivas da atlética destacada em *vão à semifinal*, *na briga pela repescagem*, *na briga pela vaga* e *fora*. Para cada uma mostra os jogos que faltam (com a chance de vitória), o que precisa fazer ("semifinal garantida se vencer X e não perder para Y", "pelo menos a repescagem se...", "fora se..."), de quais outros jogos depende e quem deve enfrentar na repescagem e na semifinal. *Garantida* e *fora* são conta exata ([`js/situacao.js`](js/situacao.js)): todas as combinações de resultado dos jogos que faltam no grupo; empate em pontos e vitórias fica "no saldo". *Provável* é vaga direta em pelo menos 60% das simulações e *praticamente fora*, menos de 3%.
 - A previsão da geral soma os pontos já conquistados com os esperados em todas as modalidades que faltam.
 - **Cenários** (Geral → Previsão e Análise): pessimista, realista e otimista para a atlética destacada. Cada um é a média de um quinto das simulações (as 20% piores para ela, as 20% do meio e as 20% melhores), com a geral nesse cenário e as modalidades onde mais muda.
 - **Edição 2025** ([`js/historico.js`](js/historico.js)): pontos de cada atlética em cada modalidade na classificação final de 2025 (boletins oficiais nº 12, 13 e 17). Aparece na Análise e nas tabelas de previsão. Suposições: Vikings RI = Vikings ICS; Vetich = Veterinária e Ursal juntas.
@@ -136,6 +137,7 @@ Roda os testes das regras de pontuação.
 | `js/permissoes.js` | Quem pode editar e administrar, a partir do login e da equipe |
 | `js/historico.js` | Classificação final da edição de 2025, por modalidade (ponto de partida da previsão) |
 | `js/previsao.js` | Previsão das coletivas: força pelo saldo e simulação do resto do campeonato (testada em `tests/`) |
+| `js/situacao.js` | Conta exata de cada grupo: quem já garantiu vaga, quem está fora e o que cada uma precisa nos jogos que faltam (testada em `tests/`) |
 | `js/resumo.js` | Dados do resumo do dia e o PDF (o gerador, jsPDF, só é baixado quando alguém pede um PDF) |
 | `js/resumo-imagem.js` | Resumo do dia em imagem PNG, desenhada no navegador |
 | `img/atleticas/` | Escudos das atléticas |

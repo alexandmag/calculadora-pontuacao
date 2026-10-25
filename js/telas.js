@@ -3,11 +3,12 @@
 // Botões de edição só aparecem para quem pode editar (ctx.pode); quem só acompanha vê o placar.
 
 import { ATLETICAS, FASES, LOGO, MODALIDADE, MODALIDADES } from './dados.js';
-import { ESPORTES, NOME_ETAPA, ORDEM_FASES, placarEfetivo, pontosPorColocacao, vencedor } from './regras.js';
+import { ESPORTES, ETAPA, NOME_ETAPA, ORDEM_FASES, placarEfetivo, pontosPorColocacao, vencedor } from './regras.js';
 import { TIPOS_PUNICAO } from './modelo.js';
 import { PAPEIS, normalizarEmail } from './permissoes.js';
 import { EDICAO_2025, colocacao2025 } from './historico.js';
 import { cenarios } from './previsao.js';
+import { previsaoObjetiva, situacoesDoModelo } from './situacao.js';
 import { comSinal, dataCurta, dataLonga, esc, inteiro, pts } from './util.js';
 
 const NOME_FASE = Object.fromEntries(FASES.map((f) => [f.id, f.nome]));
@@ -290,7 +291,7 @@ export function inicio(ctx) {
   const cartaoAnalise = equipe
     ? secao(
         'Análise da equipe',
-        `<a class="painel cartao-analise" href="#/analise">
+        `${resumoObjetivo(ctx)}<a class="painel cartao-analise" href="#/analise">
           <span class="cartao-analise-titulo">${esc(ultimoRelatorio?.titulo || 'Chances por modalidade e destaques')}</span>
           <span class="cartao-analise-sub">${esc(ultimoRelatorio?.resumo || 'Quem tende a passar de fase, contra quem devemos jogar e os atletas que mais pontuam.')}</span>
         </a>`,
@@ -687,8 +688,11 @@ function blocoPrevisao(ctx, info) {
     )
     .join('');
   const nossa = ctx.modelo.nossa && dados[ctx.modelo.nossa];
+  const situacao = blocoSituacao(ctx, info);
   let caminho = '';
-  if (nossa && !nossa.eliminada) {
+  // O cartão da nossa situação já traz os adversários prováveis; sem ele, fica a frase do caminho.
+  const temCartao = Boolean(situacoesDoModelo(ctx.modelo)[info.m.id]?.times[ctx.modelo.nossa]);
+  if (nossa && !nossa.eliminada && !temCartao) {
     const semi = rivaisProvaveis(ctx, nossa.rivalSemi);
     const fin = rivaisProvaveis(ctx, nossa.rivalFinal);
     const partes = [semi ? `semifinal contra ${semi}` : '', fin ? `final contra ${fin}` : ''].filter(Boolean);
@@ -696,7 +700,7 @@ function blocoPrevisao(ctx, info) {
   }
   return secao(
     'Previsão',
-    `${caminho}
+    `${situacao}${caminho}
     <div class="tabela-rolagem painel"><table class="tabela tabela-previsao">
       <thead><tr><th class="nome" scope="col">Atlética</th><th scope="col" title="Terminar em 1º no grupo">Líder</th>${comRepescagem ? '<th scope="col" title="Ir para a repescagem">Rep.</th>' : ''}<th scope="col">Semi</th><th scope="col">Final</th><th scope="col">Título</th><th scope="col" title="Pontos esperados na geral">Pts</th></tr></thead>
       <tbody>${linhas}</tbody>
@@ -961,6 +965,275 @@ function blocoNossasChances(ctx) {
   );
 }
 
+// ---------- Previsão objetiva (só a equipe) ----------
+// Para cada coletiva em andamento: vai à semifinal, briga pela repescagem, briga pela vaga ou está
+// fora; o que precisa nos jogos que faltam (conta exata, em situacao.js) e quem deve enfrentar.
+
+const CATEGORIAS = [
+  ['semi', 'Vão à semifinal'],
+  ['repescagem', 'Na briga pela repescagem'],
+  ['briga', 'Na briga pela vaga'],
+  ['fora', 'Fora'],
+];
+
+function juntarE(partes) {
+  return partes.length > 1 ? `${partes.slice(0, -1).join(', ')} e ${partes[partes.length - 1]}` : partes[0] || '';
+}
+
+// "vencer Touros", "não perder para Manada", "vencer Alfa por 2×0"...
+const FRASES = {
+  v: (x) => `vencer ${x}`,
+  e: (x) => `empatar com ${x}`,
+  d: (x) => `perder para ${x}`,
+  'v,e': (x) => `não perder para ${x}`,
+  'e,d': (x) => `não vencer ${x}`,
+  'v,d': (x) => `não empatar com ${x}`,
+  'v20,v21': (x) => `vencer ${x}`,
+  v20: (x) => `vencer ${x} por 2×0`,
+  v21: (x) => `vencer ${x} por 2×1`,
+  'd12,d02': (x) => `perder para ${x}`,
+  d12: (x) => `perder para ${x} por 1×2`,
+  d02: (x) => `perder para ${x} por 0×2`,
+  'v20,v21,d12': (x) => `ganhar pelo menos um set de ${x}`,
+  'v21,d12': (x) => `ir ao 3º set contra ${x}`,
+  'v20,d02': (x) => `não ir ao 3º set contra ${x}`,
+  'v21,d12,d02': (x) => `não vencer ${x} por 2×0`,
+};
+
+// Jogos com a mesma exigência viram uma frase só: "vencer Vikings ICS, AJAC e Alfa", "não vencer
+// Touros nem Raptors".
+function textoCondicoes(ctx, condicoes) {
+  if (!condicoes.length) return 'qualquer resultado';
+  const grupos = new Map();
+  for (const c of condicoes) {
+    const k = FRASES[c.resultados.join(',')] ? c.resultados.join(',') : `${c.resultados.join(',')}|${c.contra}`;
+    if (!grupos.has(k)) grupos.set(k, { resultados: c.resultados, ids: [] });
+    grupos.get(k).ids.push(c.contra);
+  }
+  const frases = [...grupos.values()].map(({ resultados, ids }) => {
+    const frase = FRASES[resultados.join(',')];
+    const nomes = ids.map((id) => nome(ctx, id));
+    if (!frase) return resultados.map((r) => FRASES[r](nomes[0])).join(' ou ');
+    return frase(frase('').startsWith('não') ? nomes.join(' nem ') : juntarE(nomes));
+  });
+  return juntarE(frases);
+}
+
+// Até duas combinações por caso; o resto vira "ou outras N combinações".
+function textoOpcoes(ctx, opcoes) {
+  const mostradas = opcoes.slice(0, 2).map((o) => textoCondicoes(ctx, o));
+  const resto = opcoes.length - mostradas.length;
+  return `${mostradas.join('; ou ')}${resto ? `; ou outra${resto > 1 ? 's' : ''} ${resto} combinaç${resto > 1 ? 'ões' : 'ão'}` : ''}`;
+}
+
+const textoJogo = (ctx, j) => `${nome(ctx, j.a)} × ${nome(ctx, j.b)}`;
+
+// O resultado de outro jogo que ajuda: "Touros não vencer Vinkão".
+function textoTorcida(ctx, d) {
+  const a = nome(ctx, d.jogo.a);
+  const b = nome(ctx, d.jogo.b);
+  return (
+    { a: `${a} vencer ${b}`, b: `${b} vencer ${a}`, e: `${a} e ${b} empatarem`, ae: `${b} não vencer ${a}`, eb: `${a} não vencer ${b}`, ab: `não dar empate em ${a} × ${b}` }[
+      d.torcer.join('')
+    ] || ''
+  );
+}
+
+// "depende de Touros × Vinkão (ajuda: Touros não vencer Vinkão) e do saldo"
+function textoDepende(ctx, caso) {
+  const jogos = caso.depende.slice(0, 3).map((d) => {
+    const torcida = textoTorcida(ctx, d);
+    return torcida ? `${textoJogo(ctx, d.jogo)} (ajuda: ${torcida})` : textoJogo(ctx, d.jogo);
+  });
+  if (caso.depende.length > 3) jogos.push('outros jogos');
+  if (!jogos.length) return caso.saldo ? 'do saldo' : 'de outros resultados';
+  return `de ${juntarE(jogos)}${caso.saldo ? ' e do saldo' : ''}`;
+}
+
+// Quando a repescagem está garantida mas a semifinal direta ainda pode vir: "se Touros não vencer
+// Vinkão (ou pelo saldo)" ou "conforme Touros × Vinkão e o saldo".
+function textoSobe(ctx, caso) {
+  const torcidas = caso.depende.map((d) => textoTorcida(ctx, d));
+  if (caso.depende.length && torcidas.every(Boolean) && caso.depende.length <= 2) return `se ${juntarE(torcidas)}${caso.saldo ? ' (ou pelo saldo)' : ''}`;
+  if (!caso.depende.length) return caso.saldo ? 'pelo saldo' : 'conforme os outros jogos';
+  return `conforme ${juntarE(caso.depende.slice(0, 3).map((d) => textoJogo(ctx, d.jogo)))}${caso.saldo ? ' e o saldo' : ''}`;
+}
+
+// Chance de cair num caso e, nele, de ir à semifinal (das simulações, pelas mesmas combinações).
+function chanceDoCaso(chances, caso) {
+  if (!chances?.padroes) return null;
+  let n = 0;
+  let semi = 0;
+  for (const k of caso.chaves) {
+    n += chances.padroes[k]?.n || 0;
+    semi += chances.padroes[k]?.semi || 0;
+  }
+  return { p: n, semi: n ? semi / n : null };
+}
+
+function linhaCaso(ctx, o, caso, simulacoes) {
+  const ch = chanceDoCaso(o.chances, caso);
+  const prob = ch && simulacoes ? ` <small>chance ${pct(ch.p / simulacoes)}</small>` : '';
+  const semiDentro = ch?.semi !== null && ch?.semi !== undefined ? ` <small>semifinal em ${pct(ch.semi)} desses casos</small>` : '';
+  const se = textoOpcoes(ctx, caso.opcoes);
+  const semFaltar = !o.t.faltam.length;
+  if (caso.classe === 'semi') return `<li class="caso caso-semi"><strong>Semifinal garantida</strong>${semFaltar ? '' : ` se ${se}`}.${prob}</li>`;
+  if (caso.classe === 'fora') return `<li class="caso caso-fora"><strong>Fora</strong>${semFaltar ? '' : ` se ${se}`}.${prob}</li>`;
+  if (caso.classe === 'repescagem') {
+    const titulo = caso.exato ? 'Repescagem garantida' : 'Pelo menos a repescagem';
+    const extra = caso.exato ? '' : `; vai direto à semifinal ${textoSobe(ctx, caso)}`;
+    return `<li class="caso caso-repescagem"><strong>${titulo}</strong>${semFaltar ? '' : ` se ${se}`}${extra}.${prob}${caso.exato ? '' : semiDentro}</li>`;
+  }
+  const outros = o.t.resumo.length > 1 ? 'Nos outros casos' : semFaltar ? 'Já jogou tudo' : 'Em qualquer resultado';
+  return `<li class="caso caso-depende"><strong>${outros}</strong>, depende ${textoDepende(ctx, caso)}.${o.t.resumo.length > 1 ? prob : ''}${semiDentro}</li>`;
+}
+
+// Selo do veredito: "Classificada", "Provável · 81%", "Repescagem 40%", "Eliminada"...
+function seloVeredito(o) {
+  const c = o.chances;
+  const direta = c ? (o.sit.repescagem ? c.lider : c.semi) : null;
+  const textos = {
+    garantida: o.categoria === 'repescagem' ? 'Repescagem garantida' : 'Classificada',
+    provavel: `Provável · ${pct(direta || 0)}`,
+    'na-semi': 'Na semifinal',
+    'na-final': 'Na final',
+    'parou-semi': 'Parou na semifinal',
+    'final-jogada': 'Final jogada',
+    'na-repescagem': 'Na repescagem',
+    briga: o.categoria === 'repescagem' ? `Repescagem ${pct(c?.repescagem || 0)}` : `Semi ${pct(c?.semi || 0)}`,
+    eliminada: 'Eliminada',
+    praticamente: `Praticamente fora · ${pct(c?.semi || 0)}`,
+    wo: 'W.O.',
+    'perdeu-repescagem': 'Caiu na repescagem',
+  };
+  const classe = { semi: 'selo-v', repescagem: 'selo-andamento', briga: 'selo-e', fora: 'selo-d' }[o.categoria];
+  return `<span class="selo ${classe}">${textos[o.motivo] || ''}</span>`;
+}
+
+// Quem deve enfrentar: adversário já definido ou os mais prováveis da simulação.
+function textoRivais(ctx, o) {
+  const partes = [];
+  if (o.t.rivalFinal) partes.push(`final contra ${nome(ctx, o.t.rivalFinal)}`);
+  else if (o.t.rivalSemi) partes.push(`semifinal contra ${nome(ctx, o.t.rivalSemi)}`);
+  else if (o.chances && o.categoria !== 'fora') {
+    if (o.categoria === 'repescagem') {
+      const rep = rivaisProvaveis(ctx, o.chances.rivalRepescagem);
+      if (rep) partes.push(`na repescagem, ${rep}`);
+    }
+    const semi = rivaisProvaveis(ctx, o.chances.rivalSemi);
+    if (semi) partes.push(`na semifinal, ${semi}`);
+  }
+  return partes.length ? `<p class="objetivo-rivais"><strong>Deve enfrentar:</strong> ${partes.join('; ')}.</p>` : '';
+}
+
+// Jogos que faltam no grupo, com data e a chance de vitória.
+function textoFaltam(ctx, o) {
+  if (!o.t.faltam?.length) return '';
+  const itens = o.t.faltam.map(({ jogo, contra }) => {
+    const r = o.chances?.jogos?.[contra];
+    const soma = (ks) => ks.reduce((s, k) => s + (r?.[k] || 0), 0);
+    const total = soma(['v20', 'v21', 'v', 'e', 'd12', 'd02', 'd']);
+    const detalhes = [
+      jogo.data ? `${esc(dataCurta(jogo.data))}${jogo.hora ? `, ${esc(jogo.hora)}` : ''}` : '',
+      total ? `vitória ${pct(soma(['v20', 'v21', 'v']) / total)}` : '',
+    ].filter(Boolean);
+    return `<strong>${nome(ctx, contra)}</strong>${detalhes.length ? ` (${detalhes.join(' · ')})` : ''}`;
+  });
+  return `<p class="objetivo-faltam">Falta${itens.length > 1 ? 'm' : ''}: ${itens.join(' · ')}</p>`;
+}
+
+function cartaoObjetivo(ctx, o, { titulo = true } = {}) {
+  const { t, chances: c } = o;
+  const m = MODALIDADE[o.mod];
+  const pos = t.posicao ? `${t.posicao}º no grupo ${esc(t.grupo)}${t.pts !== undefined ? ` com ${pts(t.pts)}` : ''}` : `Grupo ${esc(t.grupo)}`;
+  const numeros = c && !c.eliminada && o.categoria !== 'fora'
+    ? `<p class="objetivo-numeros">${o.sit.repescagem ? `Liderar ${pct(c.lider)} · Repescagem ${pct(c.repescagem)} · ` : ''}Semifinal ${pct(c.semi)} · Final ${pct(c.final)} · Título ${pct(c.titulo)}</p>`
+    : '';
+  const naFase = ['na-semi', 'na-final', 'parou-semi', 'final-jogada', 'na-repescagem', 'perdeu-repescagem'].includes(o.motivo);
+  const casos = !naFase && o.motivo !== 'wo' && o.motivo !== 'eliminada' && t.resumo?.length
+    ? `<ul class="objetivo-casos">${t.resumo.map((caso) => linhaCaso(ctx, o, caso, ctx.previsao?.simulacoes)).join('')}</ul>`
+    : '';
+  const motivoFora = o.motivo === 'eliminada' && !naFase ? `<p class="objetivo-numeros">Não alcança mais ${o.sit.repescagem ? 'o 2º lugar do grupo' : 'os dois primeiros do grupo'}.</p>` : '';
+  const repescagem = t.naRepescagem && o.motivo === 'na-repescagem'
+    ? `<p class="objetivo-numeros">${t.naRepescagem.posicao}º na repescagem${t.naRepescagem.resumo?.length ? `: ${t.naRepescagem.resumo.map((caso) => `${caso.classe === 'semi' ? 'semifinal' : caso.classe === 'fora' ? 'fora' : 'depende'} se ${textoOpcoes(ctx, caso.opcoes)}`).join('; ')}` : ''}.</p>`
+    : '';
+  return `<article class="painel objetivo objetivo-${o.categoria}${classeNossa(ctx, t.id)}">
+      <header>
+        ${titulo ? `<h4><a href="#/m/${o.mod}">${esc(m.curto)}</a></h4>` : `<h4>${nome(ctx, t.id)}</h4>`}
+        ${seloVeredito(o)}
+      </header>
+      ${naFase ? '' : `<p class="objetivo-pos">${pos}</p>`}
+      ${numeros}${motivoFora}${repescagem}
+      ${naFase || o.categoria === 'fora' ? '' : textoFaltam(ctx, o)}
+      ${casos}
+      ${textoRivais(ctx, o)}
+    </article>`;
+}
+
+function objetivoDaNossa(ctx) {
+  const { modelo, previsao } = ctx;
+  if (!modelo.nossa || !previsao) return null;
+  return previsaoObjetiva(modelo, previsao, modelo.nossa);
+}
+
+function blocoObjetivo(ctx) {
+  const { modelo } = ctx;
+  if (!modelo.nossa) return '';
+  if (!ctx.previsao) return secao('Previsão objetiva', vazio('Calculando a previsão…'));
+  const lista = objetivoDaNossa(ctx);
+  if (!lista.length) return '';
+  const grupos = CATEGORIAS.map(([cat, titulo]) => {
+    const dela = lista.filter((o) => o.categoria === cat).sort((x, y) => (y.chances?.semi ?? 0) - (x.chances?.semi ?? 0));
+    if (!dela.length) return '';
+    return `<div class="objetivo-grupo"><h3>${titulo} <small>${dela.length}</small></h3><div class="objetivos">${dela.map((o) => cartaoObjetivo(ctx, o)).join('')}</div></div>`;
+  }).join('');
+  return secao(
+    `Previsão objetiva · ${modelo.nomes[modelo.nossa]}`,
+    `${grupos}
+    <p class="nota">"Garantida" e "Fora" são conta exata: todas as combinações de resultado dos jogos que faltam (vitória, empate ou derrota; no vôlei, 2×0 ou 2×1). Empate em pontos e vitórias vai para o saldo, que depende do placar. "Provável" é semifinal direta em pelo menos 60% das ${ctx.previsao.simulacoes.toLocaleString('pt-BR')} simulações; "praticamente fora", menos de 3%. As chances de cada caso e os adversários também vêm das simulações (a porcentagem do adversário é a chance de o jogo acontecer).</p>`,
+  );
+}
+
+// Início: uma linha por caso, com as modalidades.
+function resumoObjetivo(ctx) {
+  const lista = objetivoDaNossa(ctx);
+  if (!lista?.length) return '';
+  const linhas = CATEGORIAS.map(([cat, titulo]) => {
+    const dela = lista.filter((o) => o.categoria === cat);
+    if (!dela.length) return '';
+    const mods = dela
+      .map((o) => {
+        const c = o.chances;
+        const extra = o.motivo === 'garantida' ? ' ✓' : cat === 'semi' && c ? ` ${pct(o.sit.repescagem ? c.lider : c.semi)}` : cat === 'repescagem' && c ? ` ${pct(c.semi)}` : cat === 'briga' && c ? ` ${pct(c.semi)}` : '';
+        return `${esc(MODALIDADE[o.mod].curto)}<small>${extra}</small>`;
+      })
+      .join(', ');
+    return `<li class="obj-${cat}"><span class="obj-rotulo">${titulo}</span><span class="obj-mods">${mods}</span></li>`;
+  }).join('');
+  return `<a class="painel resumo-objetivo" href="#/analise"><ul>${linhas}</ul><span class="nota">Semifinal: % de ir direto; repescagem e briga: % de chegar à semifinal. ✓ = garantida. Toque para ver o que cada uma precisa.</span></a>`;
+}
+
+// Modalidade: a nossa situação e quem já está dentro ou fora.
+function blocoSituacao(ctx, info) {
+  const sit = situacoesDoModelo(ctx.modelo)[info.m.id];
+  if (!sit) return '';
+  const nossa = ctx.modelo.nossa ? previsaoObjetiva(ctx.modelo, ctx.previsao, ctx.modelo.nossa).find((o) => o.mod === info.m.id) : null;
+  const times = Object.values(sit.times);
+  const nomes = (lista) => lista.map((t) => nome(ctx, t.id)).join(', ');
+  const classificadas = times.filter((t) => t.destino === 'semi' || [ETAPA.semifinalista, ETAPA.finalista].includes(t.etapa));
+  const naRepescagem = sit.repescagem ? times.filter((t) => t.destino === 'repescagem' || t.etapa === ETAPA.naRepescagem) : [];
+  const pelomenos = sit.repescagem ? times.filter((t) => !t.destino && t.possiveis?.length === 2 && !t.possiveis.includes('fora')) : [];
+  const fora = times.filter((t) => t.destino === 'fora' || (sit.mataMata && [ETAPA.grupos, ETAPA.repescagem, ETAPA.wo].includes(t.etapa)));
+  const itens = [
+    classificadas.length ? `<li><span class="selo selo-v">Na semifinal</span> ${nomes(classificadas)}</li>` : '',
+    naRepescagem.length ? `<li><span class="selo selo-andamento">Repescagem garantida</span> ${nomes(naRepescagem)}</li>` : '',
+    pelomenos.length ? `<li><span class="selo selo-andamento">Pelo menos a repescagem</span> ${nomes(pelomenos)}</li>` : '',
+    fora.length ? `<li><span class="selo selo-d">Fora</span> ${nomes(fora)}</li>` : '',
+  ].join('');
+  return `${nossa ? cartaoObjetivo(ctx, nossa, { titulo: false }) : ''}
+    ${itens ? `<ul class="painel lista-situacao">${itens}</ul>` : '<p class="nota">Ninguém garantiu vaga nem foi eliminado ainda.</p>'}`;
+}
+
 // Cenários (só a equipe): pessimista, realista e otimista para a atlética destacada.
 const CENARIOS = [
   ['pessimista', 'Pessimista', '20% piores simulações para nós'],
@@ -1042,6 +1315,7 @@ export function analise(ctx) {
   const atletas = Object.values(ctx.analises || {}).find((d) => d?.tipo === 'atletas');
   const textos = lista.length ? secao('Relatórios', lista.map((r, i) => blocoRelatorio(r, i === 0)).join('')) : '';
   return `${cabecalho('Análise', 'Só a equipe vê esta página', { voltar: { href: '#/inicio', texto: 'Início' } })}
+    ${blocoObjetivo(ctx)}
     ${blocoCenarios(ctx)}
     ${blocoNossasChances(ctx)}
     ${textos}

@@ -16,6 +16,7 @@
 import { MODALIDADES } from './dados.js';
 import { COLETIVAS_PRINCIPAIS, pontos2025 } from './historico.js';
 import { placarEfetivo, pontosPorColocacao, vencedor } from './regras.js';
+import { chaveDosResultados, resultadoDoTime } from './situacao.js';
 
 // forca: quanto as atléticas costumam diferir; ruido: quanto um jogo foge do esperado; pontos: média de
 // gols ou pontos de cada time por jogo (só para montar placares plausíveis). Unidades: gols (futsal,
@@ -290,16 +291,18 @@ function simularModalidade(p, rng) {
     const real = lista.find((j) => mesmoPar(j, x, y));
     const feito = real && doJogoReal(real, esporte);
     if (feito && !(mataMata && feito.v === 'empate')) return feito;
-    return sortearJogo(x, y, forca(x), forca(y), esporte, par, rng, mataMata);
+    return { ...sortearJogo(x, y, forca(x), forca(y), esporte, par, rng, mataMata), sorteado: true };
   };
   const venceu = (res) => (res.v === 'a' ? res.a : res.b);
   const perdeu = (res) => (res.v === 'a' ? res.b : res.a);
 
-  // Grupos.
+  // Grupos. Os jogos sorteados ficam guardados para a chance de cada resultado.
   const tabelas = {};
+  const sorteados = [];
   for (const [letra, membros] of Object.entries(p.grupos)) {
     const resultados = [];
     for (let i = 0; i < membros.length; i++) for (let k = i + 1; k < membros.length; k++) resultados.push(jogar(p.grupo, membros[i], membros[k], false));
+    sorteados.push(...resultados.filter((r) => r.sorteado));
     // Jogos de W.O. contra quem saiu continuam valendo para quem compareceu.
     for (const j of p.grupo) {
       const contraQuemSaiu = j.res?.wo && membros.includes(j.a) !== membros.includes(j.b) && (membros.includes(j.a) || membros.includes(j.b));
@@ -401,6 +404,7 @@ function simularModalidade(p, rng) {
     final: new Set([campea, vice].filter(Boolean)),
     paresSemi,
     parFinal: campea && vice ? [campea, vice] : null,
+    sorteados,
   };
 }
 
@@ -469,7 +473,10 @@ export function preverCompeticao(modelo, { simulacoes = SIMULACOES, semente = 20
   const porMod = {};
   for (const p of mods) {
     porMod[p.mod] = Object.fromEntries(
-      p.times.map((id) => [id, { pontos: 0, colocacoes: [], lider: 0, repescagem: 0, semi: 0, final: 0, titulo: 0, podio: 0, rivalSemi: {}, rivalFinal: {} }]),
+      p.times.map((id) => [
+        id,
+        { pontos: 0, colocacoes: [], lider: 0, repescagem: 0, semi: 0, final: 0, titulo: 0, podio: 0, rivalSemi: {}, rivalFinal: {}, rivalRepescagem: {}, jogos: {}, padroes: {} },
+      ]),
     );
   }
   const somaTotal = Object.fromEntries(ids.map((id) => [id, 0]));
@@ -510,6 +517,28 @@ export function preverCompeticao(modelo, { simulacoes = SIMULACOES, semente = 20
       };
       r.paresSemi.forEach((par) => anotar(par, 'rivalSemi'));
       if (r.parFinal) anotar(r.parFinal, 'rivalFinal');
+      // Quem mais esteve com ela na repescagem.
+      for (const x of r.repescagem) for (const y of r.repescagem) if (x !== y && conta[x]) conta[x].rivalRepescagem[y] = (conta[x].rivalRepescagem[y] || 0) + 1;
+      // Resultado de cada jogo que falta e o que aconteceu com ela depois de cada combinação deles.
+      const meus = {};
+      for (const res of r.sorteados) {
+        for (const [id, contra] of [[res.a, res.b], [res.b, res.a]]) {
+          const c = conta[id];
+          if (!c) continue;
+          const resultado = resultadoDoTime(res, id, p.esporte);
+          const jogo = (c.jogos[contra] ??= {});
+          jogo[resultado] = (jogo[resultado] || 0) + 1;
+          (meus[id] ??= []).push({ contra, resultado });
+        }
+      }
+      for (const [id, lista] of Object.entries(meus)) {
+        const chave = chaveDosResultados(lista);
+        const q = (conta[id].padroes[chave] ??= { n: 0, lider: 0, repescagem: 0, semi: 0 });
+        q.n++;
+        if (r.lideres.has(id)) q.lider++;
+        if (r.repescagem.has(id)) q.repescagem++;
+        if (r.semi.has(id)) q.semi++;
+      }
     });
     // Posição na geral desta simulação (empate em pontos: sorteio, aproximando o desempate do Art. 15).
     const fila = ids.map((id) => ({ id, t: total[id], sorte: rng() })).sort((x, y) => y.t - x.t || x.sorte - y.sorte);
@@ -537,6 +566,12 @@ export function preverCompeticao(modelo, { simulacoes = SIMULACOES, semente = 20
           // Adversários mais prováveis: chance de a semifinal (ou a final) ser contra cada uma.
           rivalSemi: Object.fromEntries(Object.entries(c.rivalSemi).map(([r, n]) => [r, n / simulacoes])),
           rivalFinal: Object.fromEntries(Object.entries(c.rivalFinal).map(([r, n]) => [r, n / simulacoes])),
+          rivalRepescagem: Object.fromEntries(Object.entries(c.rivalRepescagem).map(([r, n]) => [r, n / simulacoes])),
+          // Jogos que faltam no grupo: chance de cada resultado (v, e, d; no vôlei, v20, v21, d12, d02).
+          jogos: Object.fromEntries(Object.entries(c.jogos).map(([r, porResultado]) => [r, Object.fromEntries(Object.entries(porResultado).map(([k, n]) => [k, n / simulacoes]))])),
+          // Por combinação de resultados nos jogos que faltam (chave de chaveDosResultados): quantas
+          // simulações caíram nela e o que aconteceu depois.
+          padroes: c.padroes,
           eliminada: p.eliminados.has(id),
         },
       ]),

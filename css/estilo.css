@@ -2052,3 +2052,221 @@ button.item-punicao:hover {
     transition: none !important;
   }
 }
+
+/* Previsão objetiva: semifinal, repescagem, briga e fora */
+
+.objetivo-grupo + .objetivo-grupo {
+  margin-top: 16px;
+}
+
+.objetivo-grupo h3 {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin: 0 0 8px;
+  font-size: 0.95rem;
+}
+
+.objetivo-grupo h3 small {
+  color: var(--tinta-suave);
+  font-family: var(--fonte-numero);
+  font-size: 0.95rem;
+}
+
+.objetivos {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 10px;
+}
+
+.objetivo {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  padding: 12px 14px;
+  border-left: 4px solid var(--tinta-suave);
+  font-size: 0.9rem;
+}
+
+.objetivo-semi {
+  border-left-color: var(--vitoria);
+}
+
+.objetivo-repescagem {
+  border-left-color: var(--bronze);
+}
+
+.objetivo-fora {
+  border-left-color: var(--derrota);
+}
+
+.objetivo header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.objetivo h4 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.objetivo h4 a {
+  color: inherit;
+}
+
+.objetivo p {
+  margin: 0;
+}
+
+.objetivo-pos {
+  font-weight: 600;
+}
+
+.objetivo-numeros,
+.objetivo-faltam {
+  color: var(--tinta-suave);
+}
+
+.objetivo-faltam strong {
+  color: var(--tinta);
+}
+
+.objetivo-casos {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 2px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.caso {
+  padding: 6px 8px;
+  border-radius: var(--raio-pequeno);
+  background: var(--neutro-fundo);
+  overflow-wrap: anywhere;
+}
+
+.caso small {
+  display: block;
+  color: var(--tinta-suave);
+  font-size: 0.78rem;
+}
+
+.caso-semi {
+  background: var(--vitoria-fundo);
+}
+
+.caso-semi strong {
+  color: var(--vitoria);
+}
+
+.caso-repescagem {
+  background: var(--bronze-fundo);
+}
+
+.caso-repescagem strong {
+  color: var(--bronze);
+}
+
+.caso-fora {
+  background: var(--derrota-fundo);
+}
+
+.caso-fora strong {
+  color: var(--derrota);
+}
+
+.objetivo-rivais {
+  font-size: 0.85rem;
+}
+
+.resumo-objetivo {
+  display: block;
+  margin-bottom: 8px;
+  padding: 12px 14px;
+  color: inherit;
+  text-decoration: none;
+}
+
+.resumo-objetivo:hover {
+  background: var(--superficie-2);
+}
+
+.resumo-objetivo ul {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0 0 8px;
+  padding: 0;
+  list-style: none;
+}
+
+.resumo-objetivo li {
+  display: grid;
+  grid-template-columns: 9.5rem 1fr;
+  gap: 8px;
+  font-size: 0.9rem;
+}
+
+.resumo-objetivo .obj-rotulo {
+  font-weight: 700;
+}
+
+.resumo-objetivo .obj-semi .obj-rotulo {
+  color: var(--vitoria);
+}
+
+.resumo-objetivo .obj-repescagem .obj-rotulo {
+  color: var(--bronze);
+}
+
+.resumo-objetivo .obj-fora .obj-rotulo {
+  color: var(--derrota);
+}
+
+.resumo-objetivo small {
+  color: var(--tinta-suave);
+  font-family: var(--fonte-numero);
+  font-size: 0.85rem;
+}
+
+.resumo-objetivo .nota {
+  display: block;
+  margin: 0;
+}
+
+@media (max-width: 420px) {
+  .resumo-objetivo li {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+}
+
+.lista-situacao {
+  margin-top: 10px;
+}
+
+.lista-situacao li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  font-size: 0.9rem;
+}
+
+.objetivo + .lista-situacao,
+.lista-situacao + .caminho,
+.objetivo + .caminho {
+  margin-top: 10px;
+}
+
+.lista-situacao + .tabela-rolagem,
+.caminho + .tabela-rolagem {
+  margin-top: 10px;
+}
