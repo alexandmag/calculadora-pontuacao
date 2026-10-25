@@ -5,6 +5,7 @@ import { donoHash, firebaseConfig } from './firebase-config.js';
 import { criarArmazenamento } from './armazenamento.js';
 import { montarModelo } from './modelo.js';
 import { previsaoDoModelo, previsaoGuardada } from './previsao.js';
+import { situacoesDoModelo } from './situacao.js';
 import { calcularPermissao, hashEmail } from './permissoes.js';
 import * as telas from './telas.js';
 import { cliques, formularios, mudancas } from './acoes.js';
@@ -39,6 +40,7 @@ function previsaoAtual() {
       if (app.modelo === modelo) {
         try {
           previsaoDoModelo(modelo);
+          situacoesDoModelo(modelo);
         } catch (erro) {
           console.error('Não deu para calcular a previsão', erro);
         }

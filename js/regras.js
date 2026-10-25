@@ -198,7 +198,7 @@ const VALOR = {
 
 // Separa os times critério a critério, na ordem do regulamento. Devolve blocos do melhor para o pior;
 // um bloco com mais de um time segue empatado (o último critério de todos os esportes é o sorteio).
-function desempatar(ids, criterios, linhas, jogos, esporte) {
+export function desempatar(ids, criterios, linhas, jogos, esporte) {
   if (ids.length < 2 || criterios.length === 0) return [ids];
   const [criterio, ...resto] = criterios;
   const valor = criterio === 'confronto' ? pontosNoConfronto(ids, jogos, esporte) : (id) => VALOR[criterio](linhas[id]);
