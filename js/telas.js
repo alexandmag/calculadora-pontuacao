@@ -1184,7 +1184,7 @@ function objetivoDaNossa(ctx) {
 
 function blocoObjetivo(ctx) {
   const { modelo } = ctx;
-  if (!modelo.nossa) return '';
+  if (!ctx.pode.editar || !modelo.nossa) return '';
   if (!ctx.previsao) return secao('Previsão objetiva', vazio('Calculando a previsão…'));
   const lista = objetivoDaNossa(ctx);
   if (!lista.length) return '';
@@ -1202,6 +1202,7 @@ function blocoObjetivo(ctx) {
 
 // Início: uma linha por caso, com as modalidades.
 function resumoObjetivo(ctx) {
+  if (!ctx.pode.editar) return '';
   const lista = objetivoDaNossa(ctx);
   if (!lista?.length) return '';
   const linhas = CATEGORIAS.map(([cat, titulo]) => {
@@ -1221,6 +1222,7 @@ function resumoObjetivo(ctx) {
 
 // Modalidade: a nossa situação e quem já está dentro ou fora.
 function blocoSituacao(ctx, info) {
+  if (!ctx.pode.editar) return '';
   const sit = situacoesDoModelo(ctx.modelo)[info.m.id];
   if (!sit) return '';
   const nossa = ctx.modelo.nossa ? previsaoObjetiva(ctx.modelo, ctx.previsao, ctx.modelo.nossa).find((o) => o.mod === info.m.id) : null;

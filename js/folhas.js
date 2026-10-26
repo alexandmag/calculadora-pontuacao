@@ -18,7 +18,6 @@ import {
   podeCompartilharArquivo,
 } from './resumo.js';
 import { gerarImagem } from './resumo-imagem.js';
-import { previsaoDoModelo } from './previsao.js';
 import { estadoVazio } from './armazenamento.js';
 import { temResultado } from './telas.js';
 import { dataCurta, dataLonga, esc, novoId, numero } from './util.js';
@@ -581,7 +580,7 @@ export function folhaResumo({ dia = '' } = {}) {
       <div class="opcoes-formato" role="radiogroup" aria-label="Formato">${opcaoFormato('imagem', 'Imagem')}${opcaoFormato('pdf', 'PDF')}</div>
     </div>
     <p class="nota" data-previa></p>
-    <p class="nota">Traz o escudo, a posição na geral e os jogos do dia com placar, parciais, situação no grupo e observações. A imagem aparece direto na conversa do WhatsApp; o PDF é melhor para guardar ou imprimir.</p>`;
+    <p class="nota">Traz o escudo, a posição na geral (pontos já conquistados) e os jogos do dia com placar, parciais, situação no grupo e observações. Não leva previsão nem análise: pode divulgar. A imagem aparece direto na conversa do WhatsApp; o PDF é melhor para guardar ou imprimir.</p>`;
   const rodape = compartilhar
     ? '<span class="espaco"></span><button type="submit" class="botao secundario" value="baixar">Baixar</button><button type="submit" class="botao" value="compartilhar">Compartilhar</button>'
     : '<span class="espaco"></span><button type="submit" class="botao" value="baixar">Baixar</button>';
@@ -594,7 +593,7 @@ export function folhaResumo({ dia = '' } = {}) {
     if (preparado?.chave === chave && preparado.estado === app.estado) return preparado;
     const [atEscolhida, diaEscolhido, formatoEscolhido] = chave.split('|');
     if (!atEscolhida || !diaEscolhido) return (preparado = null);
-    const resumo = dadosDoResumo(app.modelo, atEscolhida, diaEscolhido, { previsao: previsaoDoModelo(app.modelo) });
+    const resumo = dadosDoResumo(app.modelo, atEscolhida, diaEscolhido);
     const atual = { chave, estado: app.estado, arquivo: null };
     atual.promessa = arquivoDoResumo(resumo, formatoEscolhido).then((arquivo) => (atual.arquivo = { ...arquivo, resumo }));
     atual.promessa.catch(() => {});
