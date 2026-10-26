@@ -83,10 +83,25 @@ test('o resumo leva o escudo da atlética, quando ela tem um', () => {
   assert.equal(dadosDoResumo(modelo, 'psi', DIA).logo, null);
 });
 
-test('com a previsão (só a equipe), o resumo leva a posição prevista na geral', () => {
-  const modelo = montarModelo(estadoDeTeste());
+test('o resumo é para divulgar: nunca leva previsão, só a geral dos pontos conquistados', () => {
+  const estado = estadoDeTeste();
+  estado.modalidades.xadrez = { oficial: ['dir', 'eng', 'med'] };
+  const modelo = montarModelo(estado);
+  // Mesmo que alguém passe uma previsão, ela é ignorada.
   const previsao = { simuladas: ['futsal-m'], geral: [{ id: 'eng', posicao: 2, esperados: 47.6 }] };
-  assert.deepEqual(dadosDoResumo(modelo, 'eng', DIA, { previsao }).geral, { previsao: true, posicao: 2, total: 48 });
-  assert.equal(linhaDaGeral({ previsao: true, posicao: 2, total: 48 }), 'Previsão: 2º lugar na geral · 48 pontos esperados');
-  assert.equal(dadosDoResumo(modelo, 'eng', DIA).geral.previsao, undefined, 'sem previsão, vale a geral dos pontos conquistados');
+  const resumo = dadosDoResumo(modelo, 'eng', DIA, { previsao });
+  assert.deepEqual(resumo.geral, { posicao: 2, total: 9, empatada: false });
+  assert.equal(linhaDaGeral(resumo.geral), '2º lugar na geral · 9 pontos');
+  assert.doesNotMatch(JSON.stringify(resumo), /previs|esperad/i);
+});
+
+test('geral no resumo: só depois de alguma modalidade dar pontos, e empate aparece como empate', () => {
+  // Só o W.O. (−12 da Alfa) e nenhuma modalidade encerrada: todas em zero, sem posição.
+  assert.equal(dadosDoResumo(montarModelo(estadoDeTeste()), 'eng', DIA).geral, null);
+  const estado = estadoDeTeste();
+  estado.modalidades.xadrez = { oficial: ['dir', 'eng', 'med'] };
+  // Vinkão não pontuou: empata em zero com as outras logo depois das três do xadrez.
+  const vinkao = dadosDoResumo(montarModelo(estado), 'ger', DIA).geral;
+  assert.deepEqual(vinkao, { posicao: 4, total: 0, empatada: true });
+  assert.equal(linhaDaGeral(vinkao), '4º lugar na geral (empatada) · 0 pontos');
 });

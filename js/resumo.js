@@ -25,9 +25,9 @@ export function diaPadrao(dias, hoje = hojeISO()) {
   return passados.length ? passados[passados.length - 1] : dias[0] || '';
 }
 
-// previsao (opcional, só a equipe gera o resumo): leva a posição prevista na geral em vez dos pontos
-// conquistados, que ficam em zero até as primeiras modalidades terminarem.
-export function dadosDoResumo(modelo, at, dia, { previsao = null } = {}) {
+// O resumo é feito para divulgar (grupo dos atletas, redes): leva só o que já aconteceu. Nada de
+// previsão ou análise, que são só da equipe: a geral é a dos pontos conquistados.
+export function dadosDoResumo(modelo, at, dia) {
   const nome = (id) => modelo.nomes[id] ?? '—';
   const jogos = modelo.jogos
     .filter((j) => j.data === dia && (j.a === at || j.b === at))
@@ -75,9 +75,12 @@ export function dadosDoResumo(modelo, at, dia, { previsao = null } = {}) {
   });
 
   const conta = (...tipos) => itens.filter((i) => tipos.includes(i.resultado)).length;
-  const temResultados = modelo.geral.conquistados.some((l) => l.detalhe.length || l.ajustes.length);
-  const geral = modelo.geral.conquistados.find((l) => l.id === at);
-  const prevista = previsao?.simuladas.length ? previsao.geral.find((l) => l.id === at) : null;
+  // A posição na geral só sai quando alguma modalidade já deu pontos (antes disso, todas estão em zero
+  // e a ordem não diz nada). Empatada em tudo com outras: fica com a melhor posição do empate.
+  const lista = modelo.geral.conquistados;
+  const comPontos = lista.some((l) => l.detalhe.length);
+  const geral = lista.find((l) => l.id === at);
+  const igual = (x) => x.total === geral.total && x.colocacoes.every((c, i) => c === geral.colocacoes[i]);
   return {
     id: at,
     atletica: nome(at),
@@ -92,11 +95,7 @@ export function dadosDoResumo(modelo, at, dia, { previsao = null } = {}) {
       derrotas: conta('derrota', 'wo-contra'),
       pendentes: conta('pendente'),
     },
-    geral: prevista
-      ? { previsao: true, posicao: prevista.posicao, total: Math.round(prevista.esperados) }
-      : temResultados && geral
-        ? { posicao: geral.posicao, total: geral.total }
-        : null,
+    geral: comPontos && geral ? { posicao: lista.findIndex(igual) + 1, total: geral.total, empatada: lista.filter(igual).length > 1 } : null,
   };
 }
 
@@ -221,7 +220,7 @@ export function quando(data) {
 
 export function linhaDaGeral(geral) {
   if (!geral) return '';
-  if (geral.previsao) return `Previsão: ${geral.posicao}º lugar na geral · ${geral.total} pontos esperados`;
+  if (geral.empatada) return `${geral.posicao}º lugar na geral (empatada) · ${geral.total} ${Math.abs(geral.total) === 1 ? 'ponto' : 'pontos'}`;
   return `${geral.posicao}º lugar na geral · ${geral.total} ${Math.abs(geral.total) === 1 ? 'ponto' : 'pontos'}`;
 }
 
