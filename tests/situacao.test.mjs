@@ -121,8 +121,11 @@ test('veredito: garantida, provável, repescagem, briga e fora', () => {
   const viva = { destino: null, possiveis: ['semi', 'repescagem', 'fora'] };
   assert.equal(veredito(sit, viva, { lider: 0.7, repescagem: 0.2, semi: 0.8 }).motivo, 'provavel');
   assert.equal(veredito(sit, viva, { lider: 0.3, repescagem: 0.5, semi: 0.5 }).categoria, 'repescagem');
-  assert.equal(veredito(sit, viva, { lider: 0, repescagem: 0.01, semi: 0.01 }).motivo, 'praticamente');
-  assert.equal(veredito({ repescagem: false, mataMata: false }, { destino: null, possiveis: ['semi', 'fora'] }, { lider: 0.1, semi: 0.4 }).categoria, 'briga');
+  // Chance pequena não é eliminação: continua na categoria, como "chance remota"; "fora" é só a conta.
+  assert.deepEqual(veredito(sit, viva, { lider: 0, repescagem: 0.01, semi: 0.01 }), { categoria: 'repescagem', motivo: 'remota' });
+  const semRepescagem = { repescagem: false, mataMata: false };
+  assert.equal(veredito(semRepescagem, { destino: null, possiveis: ['semi', 'fora'] }, { lider: 0.1, semi: 0.4 }).categoria, 'briga');
+  assert.deepEqual(veredito(semRepescagem, { destino: null, possiveis: ['semi', 'fora'] }, { lider: 0, semi: 0.01 }), { categoria: 'briga', motivo: 'remota' });
 });
 
 test('W.O. tira a atlética da conta do grupo', () => {

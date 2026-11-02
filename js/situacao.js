@@ -370,9 +370,11 @@ export function situacaoModalidade(info) {
 
 // Em que grupo cada modalidade coletiva coloca a atlética: vai à semifinal, briga pela repescagem,
 // briga pela vaga (sem repescagem) ou está fora. Junta a conta exata (garantida ou eliminada) com a
-// simulação (provável). chances: a previsão da modalidade para a atlética (pode faltar).
+// simulação (provável). "Fora" é só quem a conta (ou o W.O.) já eliminou: quem ainda pode passar, mesmo
+// com chance pequena, fica na própria categoria como "chance remota".
+// chances: a previsão da modalidade para a atlética (pode faltar).
 const PROVAVEL = 0.6; // chance de vaga direta a partir da qual a semifinal conta como "provável"
-const REMOTA = 0.03; // abaixo disso, "praticamente fora"
+const REMOTA = 0.03; // abaixo disso, "chance remota"
 
 export function veredito(sit, t, chances) {
   if (!t) return null;
@@ -391,12 +393,12 @@ export function veredito(sit, t, chances) {
   if (t.destino === 'fora') return { categoria: 'fora', motivo: 'eliminada' };
   const direta = chances ? (sit.repescagem ? chances.lider : chances.semi) : null;
   if (direta !== null && direta >= PROVAVEL) return { categoria: 'semi', motivo: 'provavel' };
-  if (chances && chances.semi < REMOTA && (!sit.repescagem || chances.repescagem < REMOTA)) return { categoria: 'fora', motivo: 'praticamente' };
+  const remota = chances && chances.semi < REMOTA && (!sit.repescagem || chances.repescagem < REMOTA);
   if (sit.repescagem && (t.possiveis || []).includes('repescagem')) {
-    const motivo = t.destino === 'repescagem' ? 'garantida' : t.possiveis.includes('fora') ? 'briga' : 'pelo-menos';
+    const motivo = t.destino === 'repescagem' ? 'garantida' : !t.possiveis.includes('fora') ? 'pelo-menos' : remota ? 'remota' : 'briga';
     return { categoria: 'repescagem', motivo };
   }
-  return { categoria: 'briga', motivo: 'briga' };
+  return { categoria: 'briga', motivo: remota ? 'remota' : 'briga' };
 }
 
 // Situação de todas as coletivas do modelo (calculada uma vez por modelo).

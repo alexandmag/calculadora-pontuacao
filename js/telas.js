@@ -1108,11 +1108,11 @@ function seloVeredito(o) {
     'na-repescagem': 'Na repescagem',
     briga: o.categoria === 'repescagem' ? `Repescagem ${pct(c?.repescagem || 0)}` : `Semi ${pct(c?.semi || 0)}`,
     eliminada: 'Eliminada',
-    praticamente: `Praticamente fora · ${pct(c?.semi || 0)}`,
+    remota: `Chance remota · ${pct(c?.semi || 0)}`,
     wo: 'W.O.',
     'perdeu-repescagem': 'Caiu na repescagem',
   };
-  const classe = { semi: 'selo-v', repescagem: 'selo-andamento', briga: 'selo-e', fora: 'selo-d' }[o.categoria];
+  const classe = o.motivo === 'remota' ? 'selo-wo' : { semi: 'selo-v', repescagem: 'selo-andamento', briga: 'selo-e', fora: 'selo-d' }[o.categoria];
   return `<span class="selo ${classe}">${textos[o.motivo] || ''}</span>`;
 }
 
@@ -1196,7 +1196,7 @@ function blocoObjetivo(ctx) {
   return secao(
     `Previsão objetiva · ${modelo.nomes[modelo.nossa]}`,
     `${grupos}
-    <p class="nota">"Garantida" e "Fora" são conta exata: todas as combinações de resultado dos jogos que faltam (vitória, empate ou derrota; no vôlei, 2×0 ou 2×1). Empate em pontos e vitórias vai para o saldo, que depende do placar. "Provável" é semifinal direta em pelo menos 60% das ${ctx.previsao.simulacoes.toLocaleString('pt-BR')} simulações; "praticamente fora", menos de 3%. As chances de cada caso e os adversários também vêm das simulações (a porcentagem do adversário é a chance de o jogo acontecer).</p>`,
+    <p class="nota">"Garantida" e "Fora" são conta exata: todas as combinações de resultado dos jogos que faltam (vitória, empate ou derrota; no vôlei, 2×0 ou 2×1). Empate em pontos e vitórias vai para o saldo, que depende do placar. "Provável" é semifinal direta em pelo menos 60% das ${ctx.previsao.simulacoes.toLocaleString('pt-BR')} simulações; "chance remota", menos de 3%, mas ainda viva pela conta. Em "Fora" só entra quem a conta (ou o W.O.) já eliminou. As chances de cada caso e os adversários também vêm das simulações (a porcentagem do adversário é a chance de o jogo acontecer).</p>`,
   );
 }
 
