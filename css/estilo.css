@@ -353,6 +353,12 @@ h3 {
   color: var(--tinta-suave);
 }
 
+/* Lado de jogo ainda "a definir" ("2º do Grupo A") */
+.time.a-definir .time-nome {
+  color: var(--tinta-suave);
+  font-style: italic;
+}
+
 .painel {
   background: var(--superficie);
   border: 1px solid var(--linha);

@@ -69,6 +69,19 @@ export const ESPORTES = {
 // Fases das coletivas na ordem em que acontecem.
 export const ORDEM_FASES = ['grupo', 'repescagem', 'semifinal', 'final'];
 
+// Jogo de mata-mata com um lado "a definir" (a vaga ainda depende de outro resultado, como "2º do Grupo A"):
+// o lado fica vazio e o jogo guarda um rótulo em aRotulo ou bRotulo. Ele aparece na agenda e no resumo,
+// mas não conta na classificação.
+export const ladoDefinido = (j) => Boolean(j.a && j.b);
+
+// Jogos que contam na classificação: os que têm os dois lados definidos. A repescagem é todos contra todos,
+// então só começa quando todos os jogos dela têm os dois times; até lá nenhum conta (um triangular pela
+// metade faria parecer que a fase de grupos acabou e daria como eliminado quem ainda joga nos grupos).
+export function jogosQueContam(jogos) {
+  const repescagemAberta = jogos.some((j) => j.fase === 'repescagem' && !ladoDefinido(j));
+  return jogos.filter((j) => ladoDefinido(j) && !(repescagemAberta && j.fase === 'repescagem'));
+}
+
 // Parciais de sets chegam do banco como [{ a, b }] (o Firestore não guarda lista dentro de lista).
 function normalizarParciais(parciais) {
   if (!Array.isArray(parciais) || parciais.length === 0) return null;

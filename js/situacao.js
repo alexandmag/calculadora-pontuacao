@@ -9,7 +9,7 @@
 // valendo só o 1º lugar.
 // Puro (sem DOM): testado em tests/situacao.test.mjs.
 
-import { ETAPA, desempatar, placarEfetivo, tabelaGrupo } from './regras.js';
+import { ETAPA, desempatar, jogosQueContam, placarEfetivo, tabelaGrupo } from './regras.js';
 
 // Destinos de quem termina a fase de grupos, do melhor para o pior.
 const DESTINOS = ['semi', 'repescagem', 'fora'];
@@ -345,7 +345,8 @@ export function situacaoModalidade(info) {
     for (const id of membros) if (eliminados.has(id)) times[id] = { id, grupo: letra, wo: true, calculado: true, possiveis: ['fora'], destino: 'fora', faltam: [], resumo: [] };
   }
   // Depois dos grupos: até onde cada uma chegou (repescagem, semifinal, final).
-  const mataMata = info.jogos.filter((j) => j.fase !== 'grupo' && j.a && j.b);
+  // Só o que já conta: jogo com lado "a definir", ou repescagem ainda incompleta, não começa a fase final.
+  const mataMata = jogosQueContam(info.jogos).filter((j) => j.fase !== 'grupo');
   if (mataMata.length) {
     for (const l of info.andamento || []) if (times[l.id]) times[l.id].etapa = l.etapa;
     const rep = mataMata.filter((j) => j.fase === 'repescagem');

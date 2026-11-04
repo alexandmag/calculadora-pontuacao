@@ -260,7 +260,7 @@ function prepararModalidade(info, zerados) {
   const reais = info.jogos.filter((j) => !j.res?.wo).map((j) => doJogoReal(j, esporte)).filter(Boolean);
   const par = { ...base };
   if (!esporte.sets && reais.length) par.pontos = (reais.reduce((s, r) => s + r.pa + r.pb, 0) / reais.length / 2 + base.pontos) / 2;
-  const porFase = (fase) => info.jogos.filter((j) => j.fase === fase && j.a && j.b);
+  const porFase = (fase) => (info.jogosQueContam || info.jogos).filter((j) => j.fase === fase && j.a && j.b);
   // Ponto de partida pela edição passada: quem foi bem em 2025 começa um pouco acima da média.
   const z = padronizar(times.map((id) => pontos2025(id, info.m.id)));
   const partida = Object.fromEntries(times.map((id, i) => [id, PESO_2025_COLETIVAS * par.forca * z[i]]));
