@@ -72,3 +72,42 @@ test('o resumo do dia traz os jogos com lado a definir, com o rótulo no lugar d
     ],
   );
 });
+
+// O grupo A termina (Direito vence a Alfa e fica em 2º, atrás da AJAC no saldo).
+function futsalGrupoEncerrado() {
+  const estado = futsal();
+  estado.jogos['dir-psi'].res = { a: 3, b: 0 };
+  return estado;
+}
+
+test('semifinal já definida não começa a fase final enquanto a repescagem tem time desconhecido', () => {
+  const estado = futsalGrupoEncerrado();
+  // Semifinal entre dois 1º colocados, lançada antes de alguém escolher o 2º do grupo A na repescagem.
+  estado.jogos.s2 = { mod: 'futsal-m', fase: 'semifinal', grupo: null, a: 'ef', b: 'com', data: '2026-11-08', hora: '10:00', local: 'Quadra 5', res: null };
+  const modelo = montarModelo(estado);
+  const sit = situacaoModalidade(modelo.modalidades['futsal-m']);
+  assert.equal(sit.mataMata, false);
+  const prev = preverCompeticao(modelo, { simulacoes: 100 });
+  for (const id of ['eng', 'ics', 'dir']) assert.notEqual(previsaoObjetiva(modelo, prev, id).find((o) => o.mod === 'futsal-m').categoria, 'fora', id);
+});
+
+test('com os três times conhecidos, a repescagem conta mesmo que um jogo ainda mostre o rótulo', () => {
+  const estado = futsalGrupoEncerrado();
+  estado.jogos.r1 = { ...estado.jogos.r1, b: 'dir', bRotulo: undefined, res: { a: 3, b: 0 } }; // ICS 3x0 Direito
+  estado.jogos.r2.res = { a: 0, b: 4 }; // Capetas 0x4 ICS
+  // r3 (Capetas x "2º do Grupo A") ainda não foi editado.
+  const modelo = montarModelo(estado);
+  const info = modelo.modalidades['futsal-m'];
+  assert.ok(info.tabelaRepescagem, 'a tabela da repescagem existe');
+  assert.deepEqual(info.tabelaRepescagem.tabela.map((l) => l.id), ['ics', 'dir', 'eng']);
+  const ics = info.andamento.find((l) => l.id === 'ics');
+  assert.equal(ics.etapa, 4.5, 'ICS segue na repescagem: falta Capetas x Direito');
+});
+
+test('W.O. num jogo da repescagem vale mesmo com outro jogo dela a definir', () => {
+  const estado = futsal();
+  estado.jogos.r2.res = { wo: 'a', woTipo: 'normal' }; // Capetas faltou contra a ICS
+  const modelo = montarModelo(estado);
+  assert.equal(modelo.modalidades['futsal-m'].wo.get('eng'), 'normal');
+  assert.ok(modelo.ajustes.some((a) => a.id === 'eng' && a.mod === 'futsal-m' && a.pontos === -12));
+});

@@ -53,7 +53,7 @@ export function montarModelo(estado, { nossaLocal = '' } = {}) {
       const vagasDiretas = m.repescagem ? 1 : 2;
       // Jogos com um lado ainda "a definir" ficam na agenda (info.jogos), mas fora da conta.
       info.jogosQueContam = jogosQueContam(info.jogos);
-      const r = classificacaoColetiva({ grupos: info.grupos, jogos: info.jogosQueContam, esporte: info.esporte, vagasDiretas });
+      const r = classificacaoColetiva({ grupos: info.grupos, jogos: info.jogosQueContam, todos: info.jogos, esporte: info.esporte, vagasDiretas });
       info.tabelas = r.tabelas;
       info.tabelaRepescagem = r.tabelaRepescagem;
       info.wo = r.wo;

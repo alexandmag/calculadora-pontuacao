@@ -231,7 +231,7 @@ export function folhaJogo({ id = null, mod = '', fase = 'grupo', grupo = '' } = 
         )
         .join('')}
     </div>
-    <p class="nota" data-so-eliminatoria>Vaga que depende de outro resultado? Escolha "A definir…": o jogo aparece na agenda e no resumo, e entra na classificação quando você escolher o time.</p>`;
+    <p class="nota" data-so-eliminatoria>Vaga que depende de outro resultado? Escolha "A definir…" e escreva quem será (ex.: 2º do Grupo A). O jogo aparece na agenda e no resumo da atlética que já está nele. Quando você escolher o time, os outros jogos com o mesmo "a definir" recebem o mesmo time.</p>`;
   const quando = `<fieldset class="grupo-campos">
       <legend>Quando</legend>
       ${seletorData('data', j.data)}
@@ -298,7 +298,26 @@ export function folhaJogo({ id = null, mod = '', fase = 'grupo', grupo = '' } = 
         obs: String(dados.get('obs') || '').trim().slice(0, LIMITE_OBS),
         atualizadoEm: Date.now(),
       };
-      gravar(app.loja.salvar('jogos', id || novoId(), doc), res ? 'Resultado salvo' : 'Jogo salvo');
+      // Um lado "a definir" que ganhou time: os outros jogos sem resultado da mesma modalidade e fase com o
+      // mesmo rótulo ("2º do Grupo A") recebem o mesmo time, para ninguém precisar editar um por um.
+      const outros = new Map();
+      for (const l of ['a', 'b']) {
+        const rotuloAntes = existente && !existente[l] && existente[`${l}Rotulo`];
+        if (!rotuloAntes || definir[l]) continue;
+        for (const [oid, o] of Object.entries(app.estado.jogos)) {
+          if (oid === id || o.mod !== modId || o.fase !== faseEscolhida || o.res) continue;
+          const atual = outros.get(oid) || o;
+          for (const ol of ['a', 'b']) {
+            const outroLado = atual[ol === 'a' ? 'b' : 'a'];
+            if (!atual[ol] && atual[`${ol}Rotulo`] === rotuloAntes && outroLado !== doc[l]) {
+              outros.set(oid, { ...atual, [ol]: doc[l], [`${ol}Rotulo`]: undefined, atualizadoEm: Date.now() });
+            }
+          }
+        }
+      }
+      const salvos = [app.loja.salvar('jogos', id || novoId(), doc), ...[...outros].map(([oid, o]) => app.loja.salvar('jogos', oid, o))];
+      const texto = res ? 'Resultado salvo' : 'Jogo salvo';
+      gravar(Promise.all(salvos), outros.size ? `${texto} (e o time em mais ${outros.size} ${outros.size === 1 ? 'jogo' : 'jogos'} com o mesmo "a definir")` : texto);
     },
   });
 }
