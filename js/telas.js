@@ -18,6 +18,8 @@ const TOTAL_MODALIDADES = MODALIDADES.length;
 // ---------- pedaços usados em várias telas ----------
 
 const nome = (ctx, id) => esc(ctx.modelo.nomes[id] ?? '—');
+// Lado de um jogo: a atlética ou, se ainda "a definir", o rótulo do jogo ("2º do Grupo A").
+const nomeDoLado = (ctx, j, lado) => (j[lado] ? nome(ctx, j[lado]) : esc(j[`${lado}Rotulo`] || 'A definir'));
 const ehNossa = (ctx, id) => Boolean(id) && id === ctx.modelo.nossa;
 const classeNossa = (ctx, id) => (ehNossa(ctx, id) ? ' nos' : '');
 
@@ -86,8 +88,8 @@ function cartaoJogo(ctx, j, { modalidade = true, data = false } = {}) {
   const meta = [modalidade ? m.curto : null, rotuloFase(j), j.local].filter(Boolean).map(esc).join(' · ');
   const lado = (l) => {
     const venceu = placar && v === l;
-    return `<span class="time${classeNossa(ctx, j[l])}${venceu ? ' venceu' : ''}">
-        <span class="time-nome">${nome(ctx, j[l])}</span><span class="time-placar">${placar ? placar[l] : ''}</span>
+    return `<span class="time${classeNossa(ctx, j[l])}${venceu ? ' venceu' : ''}${j[l] ? '' : ' a-definir'}">
+        <span class="time-nome">${nomeDoLado(ctx, j, l)}</span><span class="time-placar">${placar ? placar[l] : ''}</span>
       </span>`;
   };
   // Para quem edita, o jogo inteiro é um botão que abre a folha; para quem só acompanha, é só leitura.

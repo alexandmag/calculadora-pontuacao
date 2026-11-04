@@ -69,6 +69,22 @@ export const ESPORTES = {
 // Fases das coletivas na ordem em que acontecem.
 export const ORDEM_FASES = ['grupo', 'repescagem', 'semifinal', 'final'];
 
+// Jogo de mata-mata com um lado "a definir" (a vaga ainda depende de outro resultado, como "2º do Grupo A"):
+// o lado fica vazio e o jogo guarda um rótulo em aRotulo ou bRotulo. Ele aparece na agenda e no resumo,
+// mas não conta na classificação.
+export const ladoDefinido = (j) => Boolean(j.a && j.b);
+
+// Jogos que contam na classificação: os que têm os dois lados definidos. A repescagem é todos contra todos
+// (n times, n(n-1)/2 jogos) e só começa quando todos os times dela são conhecidos, mesmo que algum jogo
+// ainda mostre o rótulo. Até lá, nem ela nem as fases seguintes contam: um triangular pela metade faria
+// parecer que a fase de grupos acabou e daria como eliminado quem ainda joga nos grupos.
+export function jogosQueContam(jogos) {
+  const repescagem = jogos.filter((j) => j.fase === 'repescagem');
+  const conhecidos = new Set(repescagem.filter(ladoDefinido).flatMap((j) => [j.a, j.b])).size;
+  const aberta = repescagem.some((j) => !ladoDefinido(j)) && (conhecidos * (conhecidos - 1)) / 2 < repescagem.length;
+  return jogos.filter((j) => ladoDefinido(j) && !(aberta && j.fase !== 'grupo'));
+}
+
 // Parciais de sets chegam do banco como [{ a, b }] (o Firestore não guarda lista dentro de lista).
 function normalizarParciais(parciais) {
   if (!Array.isArray(parciais) || parciais.length === 0) return null;
@@ -318,8 +334,10 @@ export function compararCampanha(x, y) {
 // que a fase final começa, eles já contam como semifinalistas, mesmo antes de a semi ser lançada.
 // O RG Art. 16 deixa a forma de disputa para o regulamento específico; é uma projeção até a CO
 // divulgar a classificação oficial.
-export function classificacaoColetiva({ grupos, jogos, esporte, vagasDiretas = 0 }) {
-  const wo = woNaModalidade(jogos);
+// todos: os jogos da modalidade, inclusive os que ainda não contam (jogos traz só os que contam). Um W.O.
+// vale sempre: quem faltou sai da modalidade mesmo que a fase do jogo ainda não tenha começado a contar.
+export function classificacaoColetiva({ grupos, jogos, esporte, vagasDiretas = 0, todos = jogos }) {
+  const wo = woNaModalidade(todos);
   const eliminados = new Set(wo.keys());
   const participantes = new Set([...Object.values(grupos).flat(), ...jogos.flatMap((j) => [j.a, j.b])]);
   participantes.delete(undefined);

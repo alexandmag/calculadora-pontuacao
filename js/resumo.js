@@ -61,7 +61,7 @@ export function dadosDoResumo(modelo, at, dia) {
       fase: j.fase === 'grupo' ? `Grupo ${j.grupo || '?'}` : NOME_FASE[j.fase] || j.fase,
       local: j.local || '',
       nos: nome(at),
-      adversario: nome(j[outro]),
+      adversario: j[outro] ? nome(j[outro]) : j[`${outro}Rotulo`] || 'A definir',
       placar: p ? [p[lado], p[outro]] : null,
       sets: Boolean(esporte.sets),
       parciais,

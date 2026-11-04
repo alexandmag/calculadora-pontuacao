@@ -25,10 +25,12 @@ import { dataCurta, dataLonga, esc, novoId, numero } from './util.js';
 const nome = (id) => esc(app.modelo.nomes[id] ?? '—');
 const LIMITE_OBS = 500;
 
-function opcoesAtleticas(selecionada = '', vaziaTexto = '—') {
+// definir: acrescenta "A definir…" (vaga de mata-mata que ainda depende de outro resultado).
+const A_DEFINIR = '?';
+function opcoesAtleticas(selecionada = '', vaziaTexto = '—', { definir = false } = {}) {
   return `<option value="">${esc(vaziaTexto)}</option>${ATLETICAS.map(
     (a) => `<option value="${a.id}"${a.id === selecionada ? ' selected' : ''}>${nome(a.id)}</option>`,
-  ).join('')}`;
+  ).join('')}${definir ? `<option value="${A_DEFINIR}" data-so-eliminatoria${selecionada === A_DEFINIR ? ' selected' : ''}>A definir…</option>` : ''}`;
 }
 
 // Atalhos para os sábados e domingos do campeonato; o campo de data aceita qualquer outra.
@@ -118,7 +120,9 @@ function ligarFormJogo(form, j) {
     for (const el of form.querySelectorAll('[data-so-eliminatoria]')) el.hidden = fase === 'grupo';
     for (const lado of ['a', 'b']) {
       const id = form.elements[lado].value;
-      const rotulo = id ? app.modelo.nomes[id] : `Time ${lado.toUpperCase()}`;
+      const aDefinir = id === A_DEFINIR;
+      form.querySelector(`[data-rotulo-definir="${lado}"]`).hidden = !aDefinir || fase === 'grupo';
+      const rotulo = aDefinir ? form.elements[`${lado}Rotulo`].value.trim() || 'A definir' : id ? app.modelo.nomes[id] : `Time ${lado.toUpperCase()}`;
       for (const el of form.querySelectorAll(`[data-rotulo="${lado}"]`)) el.textContent = rotulo;
       for (const el of form.querySelectorAll(`[data-rotulo-wo="${lado}"]`)) el.textContent = `Faltou ${rotulo}`;
     }
@@ -128,6 +132,7 @@ function ligarFormJogo(form, j) {
     atualizar();
   });
   for (const campo of ['fase', 'a', 'b']) form.elements[campo].addEventListener('change', atualizar);
+  for (const campo of ['aRotulo', 'bRotulo']) form.elements[campo].addEventListener('input', atualizar);
   atualizar();
 }
 
@@ -198,6 +203,8 @@ export function folhaJogo({ id = null, mod = '', fase = 'grupo', grupo = '' } = 
     ? { ...existente, id }
     : { mod, fase, grupo, a: app.modelo.nossa || '', b: '', data: '', hora: '', local: '', res: null };
   const coletivas = MODALIDADES.filter((m) => m.tipo === 'coletiva');
+  // Lado vazio com rótulo é um time "a definir"; num jogo novo, vazio é só "ainda não escolhido".
+  const lado = (l) => (!j[l] && j[`${l}Rotulo`] ? A_DEFINIR : j[l]);
   const campoMod = existente || mod
     ? `<input type="hidden" name="mod" value="${esc(j.mod)}">`
     : `<label class="campo"><span>Modalidade</span><select name="mod">
@@ -213,9 +220,18 @@ export function folhaJogo({ id = null, mod = '', fase = 'grupo', grupo = '' } = 
       </select></label>
     </div>
     <div class="campos-lado">
-      <label class="campo"><span>Time A</span><select name="a">${opcoesAtleticas(j.a, 'Escolha…')}</select></label>
-      <label class="campo"><span>Time B</span><select name="b">${opcoesAtleticas(j.b, 'Escolha…')}</select></label>
-    </div>`;
+      <label class="campo"><span>Time A</span><select name="a">${opcoesAtleticas(lado('a'), 'Escolha…', { definir: true })}</select></label>
+      <label class="campo"><span>Time B</span><select name="b">${opcoesAtleticas(lado('b'), 'Escolha…', { definir: true })}</select></label>
+    </div>
+    <div class="campos-lado">
+      ${['a', 'b']
+        .map(
+          (l) => `<label class="campo" data-rotulo-definir="${l}" hidden><span>Quem será o time ${l.toUpperCase()}</span>
+          <input name="${l}Rotulo" value="${esc(j[`${l}Rotulo`] || '')}" placeholder="Ex.: 2º do Grupo A" maxlength="40" autocomplete="off"></label>`,
+        )
+        .join('')}
+    </div>
+    <p class="nota" data-so-eliminatoria>Vaga que depende de outro resultado? Escolha "A definir…" e escreva quem será (ex.: 2º do Grupo A). O jogo aparece na agenda e no resumo da atlética que já está nele. Quando você escolher o time, os outros jogos com o mesmo "a definir" recebem o mesmo time.</p>`;
   const quando = `<fieldset class="grupo-campos">
       <legend>Quando</legend>
       ${seletorData('data', j.data)}
@@ -255,20 +271,26 @@ export function folhaJogo({ id = null, mod = '', fase = 'grupo', grupo = '' } = 
       const grupoEscolhido = faseEscolhida === 'grupo' ? dados.get('grupo') : null;
       const a = dados.get('a');
       const b = dados.get('b');
-      if (!a || !b) return 'Escolha as duas atléticas.';
-      if (a === b) return 'Escolha atléticas diferentes.';
+      if (!a || !b) return 'Escolha as duas atléticas (ou "A definir…" fora da fase de grupos).';
+      const definir = { a: a === A_DEFINIR, b: b === A_DEFINIR };
+      if ((definir.a || definir.b) && faseEscolhida === 'grupo') return 'Na fase de grupos, escolha as duas atléticas.';
+      if (a === b && !definir.a) return 'Escolha atléticas diferentes.';
       if (faseEscolhida === 'grupo' && !grupoEscolhido) return 'Escolha o grupo.';
       let res = null;
       if (acao !== 'limpar') {
         res = lerResultado(dados, ESPORTES[m.esporte], faseEscolhida);
         if (typeof res === 'string') return res;
+        if (res && (definir.a || definir.b)) return 'Escolha os dois times antes de lançar o resultado.';
       }
+      const rotulo = (l) => (definir[l] ? String(dados.get(`${l}Rotulo`) || '').trim().slice(0, 40) || 'A definir' : undefined);
       const doc = {
         mod: modId,
         fase: faseEscolhida,
         grupo: grupoEscolhido,
-        a,
-        b,
+        a: definir.a ? '' : a,
+        b: definir.b ? '' : b,
+        aRotulo: rotulo('a'),
+        bRotulo: rotulo('b'),
         data: dados.get('data') || '',
         hora: dados.get('hora') || '',
         local: String(dados.get('local') || '').trim(),
@@ -276,7 +298,26 @@ export function folhaJogo({ id = null, mod = '', fase = 'grupo', grupo = '' } = 
         obs: String(dados.get('obs') || '').trim().slice(0, LIMITE_OBS),
         atualizadoEm: Date.now(),
       };
-      gravar(app.loja.salvar('jogos', id || novoId(), doc), res ? 'Resultado salvo' : 'Jogo salvo');
+      // Um lado "a definir" que ganhou time: os outros jogos sem resultado da mesma modalidade e fase com o
+      // mesmo rótulo ("2º do Grupo A") recebem o mesmo time, para ninguém precisar editar um por um.
+      const outros = new Map();
+      for (const l of ['a', 'b']) {
+        const rotuloAntes = existente && !existente[l] && existente[`${l}Rotulo`];
+        if (!rotuloAntes || definir[l]) continue;
+        for (const [oid, o] of Object.entries(app.estado.jogos)) {
+          if (oid === id || o.mod !== modId || o.fase !== faseEscolhida || o.res) continue;
+          const atual = outros.get(oid) || o;
+          for (const ol of ['a', 'b']) {
+            const outroLado = atual[ol === 'a' ? 'b' : 'a'];
+            if (!atual[ol] && atual[`${ol}Rotulo`] === rotuloAntes && outroLado !== doc[l]) {
+              outros.set(oid, { ...atual, [ol]: doc[l], [`${ol}Rotulo`]: undefined, atualizadoEm: Date.now() });
+            }
+          }
+        }
+      }
+      const salvos = [app.loja.salvar('jogos', id || novoId(), doc), ...[...outros].map(([oid, o]) => app.loja.salvar('jogos', oid, o))];
+      const texto = res ? 'Resultado salvo' : 'Jogo salvo';
+      gravar(Promise.all(salvos), outros.size ? `${texto} (e o time em mais ${outros.size} ${outros.size === 1 ? 'jogo' : 'jogos'} com o mesmo "a definir")` : texto);
     },
   });
 }

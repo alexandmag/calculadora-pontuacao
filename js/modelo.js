@@ -7,6 +7,7 @@ import {
   PERDA_WO,
   classificacaoColetiva,
   classificacaoGeral,
+  jogosQueContam,
   placarEfetivo,
   pontuacaoProvas,
 } from './regras.js';
@@ -50,7 +51,9 @@ export function montarModelo(estado, { nossaLocal = '' } = {}) {
       info.grupos = gruposDaModalidade(doc);
       // Com repescagem, só o líder de cada grupo vai direto à semifinal; sem ela, vão os dois primeiros.
       const vagasDiretas = m.repescagem ? 1 : 2;
-      const r = classificacaoColetiva({ grupos: info.grupos, jogos: info.jogos, esporte: info.esporte, vagasDiretas });
+      // Jogos com um lado ainda "a definir" ficam na agenda (info.jogos), mas fora da conta.
+      info.jogosQueContam = jogosQueContam(info.jogos);
+      const r = classificacaoColetiva({ grupos: info.grupos, jogos: info.jogosQueContam, todos: info.jogos, esporte: info.esporte, vagasDiretas });
       info.tabelas = r.tabelas;
       info.tabelaRepescagem = r.tabelaRepescagem;
       info.wo = r.wo;
