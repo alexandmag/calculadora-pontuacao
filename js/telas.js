@@ -1203,6 +1203,19 @@ function blocoObjetivo(ctx) {
 }
 
 // Início: uma linha por caso, com as modalidades.
+// Marca ao lado da modalidade no resumo da análise: ✓ para vaga garantida ou já conquistada (inclusive pela
+// repescagem), % de ir direto para a semifinal ainda provável e % de chegar à semifinal para quem briga.
+// No mata-mata a % de "ir direto" não diz mais nada (quem venceu a repescagem tinha 0%).
+const JA_DENTRO = ['garantida', 'na-semi', 'na-final', 'final-jogada'];
+export function marcaObjetivo(o) {
+  if (JA_DENTRO.includes(o.motivo)) return ' ✓';
+  const c = o.chances;
+  if (!c || o.motivo === 'parou-semi') return '';
+  if (o.categoria === 'semi') return ` ${pct(o.sit.repescagem ? c.lider : c.semi)}`;
+  if (['repescagem', 'briga'].includes(o.categoria)) return ` ${pct(c.semi)}`;
+  return '';
+}
+
 function resumoObjetivo(ctx) {
   if (!ctx.pode.editar) return '';
   const lista = objetivoDaNossa(ctx);
@@ -1210,13 +1223,7 @@ function resumoObjetivo(ctx) {
   const linhas = CATEGORIAS.map(([cat, titulo]) => {
     const dela = lista.filter((o) => o.categoria === cat);
     if (!dela.length) return '';
-    const mods = dela
-      .map((o) => {
-        const c = o.chances;
-        const extra = o.motivo === 'garantida' ? ' ✓' : cat === 'semi' && c ? ` ${pct(o.sit.repescagem ? c.lider : c.semi)}` : cat === 'repescagem' && c ? ` ${pct(c.semi)}` : cat === 'briga' && c ? ` ${pct(c.semi)}` : '';
-        return `${esc(MODALIDADE[o.mod].curto)}<small>${extra}</small>`;
-      })
-      .join(', ');
+    const mods = dela.map((o) => `${esc(MODALIDADE[o.mod].curto)}<small>${marcaObjetivo(o)}</small>`).join(', ');
     return `<li class="obj-${cat}"><span class="obj-rotulo">${titulo}</span><span class="obj-mods">${mods}</span></li>`;
   }).join('');
   return `<a class="painel resumo-objetivo" href="#/analise"><ul>${linhas}</ul><span class="nota">Semifinal: % de ir direto; repescagem e briga: % de chegar à semifinal. ✓ = garantida. Toque para ver o que cada uma precisa.</span></a>`;
