@@ -211,8 +211,10 @@ export function folhaJogo({ id = null, mod = '', fase = 'grupo', grupo = '' } = 
         <option value="">Escolha…</option>
         ${coletivas.map((m) => `<option value="${m.id}">${esc(m.nome)}</option>`).join('')}
       </select></label>`;
+  const daMod = MODALIDADE[j.mod];
+  const fases = !daMod ? FASES : FASES.filter((f) => (daMod.chave ? !['grupo', 'repescagem'].includes(f.id) : !['oitavas', 'quartas'].includes(f.id)) || f.id === j.fase);
   const confronto = `<div class="campos-lado">
-      <label class="campo"><span>Fase</span><select name="fase">${FASES.map(
+      <label class="campo"><span>Fase</span><select name="fase">${fases.map(
         (f) => `<option value="${f.id}"${f.id === j.fase ? ' selected' : ''}>${f.nome}</option>`,
       ).join('')}</select></label>
       <label class="campo" data-so-grupo><span>Grupo</span><select name="grupo">

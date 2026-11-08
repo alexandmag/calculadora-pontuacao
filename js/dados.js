@@ -27,6 +27,8 @@ export const LETRAS_GRUPO = ['A', 'B', 'C', 'D'];
 export const FASES = [
   { id: 'grupo', nome: 'Fase de grupos' },
   { id: 'repescagem', nome: 'Repescagem' },
+  { id: 'oitavas', nome: 'Oitavas de final' },
+  { id: 'quartas', nome: 'Quartas de final' },
   { id: 'semifinal', nome: 'Semifinal' },
   { id: 'final', nome: 'Final' },
 ];
@@ -75,6 +77,17 @@ const coletiva = (id, nome, curto, esporte, grupos, repescagem) => ({
   repescagem,
   formato: grupos ? `${grupos} · ${repescagem ? 'repescagem, semifinal e final' : 'semifinal e final'}` : 'Formato a definir pela CO',
 });
+// Chave eliminatória (a peteca): sem grupos, de jogo em jogo até a final, sem disputa de 3º lugar.
+const chave = (id, nome, curto, esporte) => ({
+  id,
+  nome,
+  curto,
+  tipo: 'coletiva',
+  esporte,
+  repescagem: false,
+  chave: true,
+  formato: 'Chave eliminatória · oitavas, quartas, semifinal e final',
+});
 const comProvas = (id, nome, curto, provas, formato) => ({ id, nome, curto, tipo: 'provas', provas, formato });
 
 // RG Art. 11. Os formatos das coletivas são os do tabelamento divulgado pela CO.
@@ -88,8 +101,8 @@ export const MODALIDADES = [
   coletiva('basquete-f', 'Basquete Feminino', 'Basquete F', 'basquete', '2 grupos de 4 · 4 rodadas', false),
   coletiva('volei-m', 'Vôlei Masculino', 'Vôlei M', 'volei', '3 grupos de 4 · 3 rodadas', true),
   coletiva('volei-f', 'Vôlei Feminino', 'Vôlei F', 'volei', '3 grupos de 4 · 3 rodadas', true),
-  coletiva('peteca-m', 'Peteca Masculino', 'Peteca M', 'peteca', null, false),
-  coletiva('peteca-f', 'Peteca Feminino', 'Peteca F', 'peteca', null, false),
+  chave('peteca-m', 'Peteca Masculino', 'Peteca M', 'peteca'),
+  chave('peteca-f', 'Peteca Feminino', 'Peteca F', 'peteca'),
   comProvas('atletismo-m', 'Atletismo Masculino', 'Atletismo M', ATLETISMO, '6 provas · revezamento vale em dobro'),
   comProvas('atletismo-f', 'Atletismo Feminino', 'Atletismo F', ATLETISMO, '6 provas · revezamento vale em dobro'),
   comProvas('natacao-m', 'Natação Masculino', 'Natação M', NATACAO_M, '7 provas · revezamentos valem em dobro'),

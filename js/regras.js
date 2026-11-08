@@ -67,7 +67,7 @@ export const ESPORTES = {
 };
 
 // Fases das coletivas na ordem em que acontecem.
-export const ORDEM_FASES = ['grupo', 'repescagem', 'semifinal', 'final'];
+export const ORDEM_FASES = ['grupo', 'repescagem', 'oitavas', 'quartas', 'semifinal', 'final'];
 
 // Jogo de mata-mata com um lado "a definir" (a vaga ainda depende de outro resultado, como "2º do Grupo A"):
 // o lado fica vazio e o jogo guarda um rótulo em aRotulo ou bRotulo. Ele aparece na agenda e no resumo,
@@ -276,8 +276,12 @@ export const ETAPA = {
   vice: 2,
   semifinalista: 2.5,
   semifinal: 3,
+  naQuartas: 3.5, // chave (peteca): nas quartas, pode terminar entre 1º e 8º
   naRepescagem: 4.5,
   repescagem: 5,
+  quartas: 5.5, // parou nas quartas: 5º a 8º
+  naOitavas: 6,
+  oitavas: 9, // parou nas oitavas: do 9º em diante
   grupos: 20,
   wo: 99,
 };
@@ -290,11 +294,16 @@ export const NOME_ETAPA = {
   [ETAPA.semifinal]: 'Parou na semifinal',
   [ETAPA.naRepescagem]: 'Na repescagem',
   [ETAPA.repescagem]: 'Parou na repescagem',
+  [ETAPA.naQuartas]: 'Nas quartas',
+  [ETAPA.quartas]: 'Parou nas quartas',
+  [ETAPA.naOitavas]: 'Nas oitavas',
+  [ETAPA.oitavas]: 'Parou nas oitavas',
   [ETAPA.grupos]: 'Fase de grupos',
   [ETAPA.wo]: 'Eliminada por W.O.',
 };
 
-// Caminho das coletivas: grupos → repescagem (em algumas) → semifinal → final. Não há oitavas nem quartas.
+// Caminho das coletivas: grupos → repescagem (em algumas) → semifinal → final. A peteca é uma chave:
+// oitavas (só para parte das atléticas; as outras entram nas quartas) → quartas → semifinal → final.
 function etapaNoJogo(fase, situacao) {
   const venceu = situacao === 'venceu';
   const perdeu = situacao === 'perdeu';
@@ -305,6 +314,10 @@ function etapaNoJogo(fase, situacao) {
       return venceu ? ETAPA.finalista : perdeu ? ETAPA.semifinal : ETAPA.semifinalista;
     case 'repescagem':
       return venceu ? ETAPA.semifinalista : perdeu ? ETAPA.repescagem : ETAPA.naRepescagem;
+    case 'quartas':
+      return venceu ? ETAPA.semifinalista : perdeu ? ETAPA.quartas : ETAPA.naQuartas;
+    case 'oitavas':
+      return venceu ? ETAPA.naQuartas : perdeu ? ETAPA.oitavas : ETAPA.naOitavas;
     default:
       return ETAPA.grupos;
   }
@@ -324,9 +337,10 @@ export function compararCampanha(x, y) {
 }
 
 // Classificação calculada de uma modalidade coletiva (grupos → repescagem → semifinal → final, sem
-// disputa de 3º lugar), seguindo a regra usada pela CO:
+// disputa de 3º lugar; na peteca, a chave oitavas → quartas → semifinal → final), seguindo a regra usada pela CO:
 // - a final define campeã e vice;
-// - na semifinal, quem perdeu para a campeã é 3º e quem perdeu para a vice é 4º;
+// - na semifinal, quem perdeu para a campeã é 3º e quem perdeu para a vice é 4º; nas quartas e nas
+//   oitavas da chave, do mesmo jeito: quem caiu diante de quem foi mais longe fica na frente;
 // - quem não venceu a repescagem (disputada em grupo) vem logo depois, na ordem da tabela da repescagem;
 // - quem não passou dos grupos é ordenado pela posição no grupo e depois pela campanha;
 // - enquanto uma fase não termina, quem segue vivo é ordenado pela campanha nos grupos (projeção).
@@ -361,7 +375,8 @@ export function classificacaoColetiva({ grupos, jogos, esporte, vagasDiretas = 0
   const posRepescagem = {};
   const naFase = (fase) => jogos.filter((j) => j.fase === fase && j.a && j.b);
   const repescagem = naFase('repescagem');
-  const mataMata = [...naFase('semifinal'), ...naFase('final')];
+  // Na ordem das fases: quem avança tem a etapa da fase seguinte por cima da anterior.
+  const mataMata = ['oitavas', 'quartas', 'semifinal', 'final'].flatMap(naFase);
   const faseFinalComecou = repescagem.length > 0 || mataMata.length > 0;
   for (const id of participantes) {
     etapa[id] = faseFinalComecou && (posGrupo[id] ?? 99) <= vagasDiretas ? ETAPA.semifinalista : ETAPA.grupos;

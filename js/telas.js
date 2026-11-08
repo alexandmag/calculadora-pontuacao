@@ -404,7 +404,7 @@ function seloEstado(info) {
 function resumoModalidade(info) {
   const { m } = info;
   if (m.tipo === 'coletiva') {
-    if (!Object.keys(info.grupos).length) return esc(m.formato);
+    if (!Object.keys(info.grupos).length && !(m.chave && info.jogos.length)) return esc(m.formato);
     const feitos = info.jogos.filter((j) => temResultado(j)).length;
     return `${info.participantes} atléticas · ${feitos} de ${info.jogos.length} jogos com resultado`;
   }
@@ -497,21 +497,34 @@ function blocoGrupos(ctx, info) {
   return secao('Grupos', grupos, { acao: botao });
 }
 
-// Repescagem (só em algumas modalidades), semifinais e final. O botão já sugere a próxima fase que falta.
+// Repescagem (só em algumas modalidades), semifinais e final; na peteca, a chave inteira. O botão já
+// sugere a próxima fase que falta.
 function blocoFinais(ctx, info) {
   const { m } = info;
   const jogos = info.jogos.filter((j) => j.fase !== 'grupo');
   const quantos = (fase) => jogos.filter((j) => j.fase === fase).length;
-  // A repescagem é um triangular (3 jogos) entre os 2º colocados.
-  const proxima = m.repescagem && quantos('repescagem') < 3 && !quantos('semifinal') ? 'repescagem' : quantos('semifinal') < 2 ? 'semifinal' : 'final';
-  const titulo = m.repescagem ? 'Repescagem, semifinal e final' : 'Semifinal e final';
+  // A repescagem é um triangular (3 jogos) entre os 2º colocados. Na chave, a fase mais adiantada lançada.
+  const proxima = m.chave
+    ? ['final', 'semifinal', 'quartas', 'oitavas'].find((f) => quantos(f)) || 'oitavas'
+    : m.repescagem && quantos('repescagem') < 3 && !quantos('semifinal')
+      ? 'repescagem'
+      : quantos('semifinal') < 2
+        ? 'semifinal'
+        : 'final';
+  const titulo = m.chave ? 'Chave' : m.repescagem ? 'Repescagem, semifinal e final' : 'Semifinal e final';
   const botao = seEditar(
     ctx,
     `<button type="button" class="botao secundario pequeno" data-acao="novo-jogo" data-mod="${m.id}" data-fase="${proxima}">Adicionar jogo</button>`,
   );
   if (!jogos.length) {
     const fases = m.repescagem ? 'a repescagem, as semifinais e a final' : 'as semifinais e a final';
-    const texto = ctx.pode.editar ? `Quando acabarem os grupos, adicione aqui ${fases}.` : `${fases.charAt(0).toUpperCase()}${fases.slice(1)} aparecem aqui quando acabarem os grupos.`;
+    const texto = m.chave
+      ? ctx.pode.editar
+        ? 'Quando a CO divulgar a chave, adicione aqui os jogos de cada fase.'
+        : 'Os jogos da chave aparecem aqui quando a CO divulgar.'
+      : ctx.pode.editar
+        ? `Quando acabarem os grupos, adicione aqui ${fases}.`
+        : `${fases.charAt(0).toUpperCase()}${fases.slice(1)} aparecem aqui quando acabarem os grupos.`;
     return secao(titulo, vazio(texto), { acao: botao });
   }
   const tabelaRep = info.tabelaRepescagem && info.tabelaRepescagem.tabela.length > 2 ? tabelaDoGrupo(ctx, info, info.tabelaRepescagem) : '';
@@ -742,9 +755,11 @@ export function modalidade(ctx, id) {
   const topo = cabecalho(m.nome, `${esc(m.formato)} ${seloEstado(info)}`, { voltar: { href: '#/modalidades', texto: 'Modalidades' } });
   if (m.tipo === 'coletiva') {
     const avisoPeteca = info.esporte.semRegraPropria
-      ? '<p class="alerta">O regulamento não define pontos de grupo nem desempate da peteca. O app usa os do vôlei até a CO definir.</p>'
+      ? m.chave
+        ? '<p class="alerta">Chave eliminatória sem disputa de 3º lugar. Até a CO divulgar a classificação oficial, quem caiu na mesma fase fica na frente se perdeu para quem foi mais longe.</p>'
+        : '<p class="alerta">O regulamento não define pontos de grupo nem desempate da peteca. O app usa os do vôlei até a CO definir.</p>'
       : '';
-    return `${topo}${avisoPeteca}${blocoPrevisao(ctx, info)}${blocoGrupos(ctx, info)}${blocoFinais(ctx, info)}${blocoClassificacao(ctx, info)}${blocoPunicoes(ctx, info)}`;
+    return `${topo}${avisoPeteca}${blocoPrevisao(ctx, info)}${m.chave ? '' : blocoGrupos(ctx, info)}${blocoFinais(ctx, info)}${blocoClassificacao(ctx, info)}${blocoPunicoes(ctx, info)}`;
   }
   if (m.tipo === 'provas') {
     return `${topo}${blocoPrevisao(ctx, info)}${blocoProvas(ctx, info)}${blocoPontosProvas(ctx, info)}${blocoClassificacao(ctx, info)}${blocoPunicoes(ctx, info)}`;
@@ -1240,7 +1255,7 @@ function blocoSituacao(ctx, info) {
   const classificadas = times.filter((t) => t.destino === 'semi' || [ETAPA.semifinalista, ETAPA.finalista].includes(t.etapa));
   const naRepescagem = sit.repescagem ? times.filter((t) => t.destino === 'repescagem' || t.etapa === ETAPA.naRepescagem) : [];
   const pelomenos = sit.repescagem ? times.filter((t) => !t.destino && t.possiveis?.length === 2 && !t.possiveis.includes('fora')) : [];
-  const fora = times.filter((t) => t.destino === 'fora' || (sit.mataMata && [ETAPA.grupos, ETAPA.repescagem, ETAPA.wo].includes(t.etapa)));
+  const fora = times.filter((t) => t.destino === 'fora' || (sit.mataMata && [ETAPA.grupos, ETAPA.repescagem, ETAPA.quartas, ETAPA.oitavas, ETAPA.wo].includes(t.etapa)));
   const itens = [
     classificadas.length ? `<li><span class="selo selo-v">Na semifinal</span> ${nomes(classificadas)}</li>` : '',
     naRepescagem.length ? `<li><span class="selo selo-andamento">Repescagem garantida</span> ${nomes(naRepescagem)}</li>` : '',
