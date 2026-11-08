@@ -33,6 +33,14 @@ export const FASES = [
   { id: 'final', nome: 'Final' },
 ];
 
+// Fases que existem em cada modalidade: a chave (peteca) não tem grupos nem repescagem; as outras coletivas
+// não têm oitavas nem quartas. Sem modalidade escolhida, todas.
+export function fasesDaModalidade(m) {
+  if (!m) return FASES;
+  const fora = m.chave ? ['grupo', 'repescagem'] : ['oitavas', 'quartas'];
+  return FASES.filter((f) => !fora.includes(f.id));
+}
+
 // Padrão das provas: vale 1x e cada atlética pode ter até 2 atletas (A1 Arts. 38 e 49).
 const prova = (id, nome, extra = {}) => ({ id, nome, peso: 1, max: 2, ...extra });
 const revezamento = (id, nome) => prova(id, nome, { peso: 2, max: 1 }); // A1 Arts. 43 e 54

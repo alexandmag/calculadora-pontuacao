@@ -100,3 +100,11 @@ test('chave no modelo: sem colocação antes da final; agenda e resumo mostram a
   assert.equal(m2.modalidades['peteca-m'].vigente.length, 0);
   assert.equal(m2.modalidades['peteca-m'].andamento.find((l) => l.id === 'eng').etapa, ETAPA.naQuartas);
 });
+
+test('fases de cada modalidade: a chave não tem grupos nem repescagem; as outras coletivas não têm oitavas nem quartas', async () => {
+  const { fasesDaModalidade } = await import('../js/dados.js');
+  const ids = (m) => fasesDaModalidade(m).map((f) => f.id);
+  assert.deepEqual(ids(MODALIDADE['peteca-m']), ['oitavas', 'quartas', 'semifinal', 'final']);
+  assert.deepEqual(ids(MODALIDADE['futsal-m']), ['grupo', 'repescagem', 'semifinal', 'final']);
+  assert.equal(ids(undefined).length, 6);
+});

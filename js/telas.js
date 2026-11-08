@@ -503,9 +503,16 @@ function blocoFinais(ctx, info) {
   const { m } = info;
   const jogos = info.jogos.filter((j) => j.fase !== 'grupo');
   const quantos = (fase) => jogos.filter((j) => j.fase === fase).length;
-  // A repescagem é um triangular (3 jogos) entre os 2º colocados. Na chave, a fase mais adiantada lançada.
+  // A repescagem é um triangular (3 jogos) entre os 2º colocados. Na chave, a fase que ainda não está completa
+  // (4 jogos de quartas, 2 semifinais, 1 final; as oitavas variam com o número de atléticas).
   const proxima = m.chave
-    ? ['final', 'semifinal', 'quartas', 'oitavas'].find((f) => quantos(f)) || 'oitavas'
+    ? quantos('final') || quantos('semifinal') >= 2
+      ? 'final'
+      : quantos('semifinal') || quantos('quartas') >= 4
+        ? 'semifinal'
+        : quantos('quartas')
+          ? 'quartas'
+          : 'oitavas'
     : m.repescagem && quantos('repescagem') < 3 && !quantos('semifinal')
       ? 'repescagem'
       : quantos('semifinal') < 2
@@ -607,6 +614,10 @@ function blocoClassificacao(ctx, info) {
   const temEmpate = !oficial && lista.some((l) => l.empatado);
   let explicacao;
   if (oficial) explicacao = 'Classificação oficial divulgada pela CO: é esta que vale na classificação geral.';
+  else if (m.chave && lista.length)
+    explicacao =
+      'Calculada com todos os jogos da chave: a final define campeã e vice; 3º é quem perdeu a semifinal para a campeã e 4º quem perdeu para a vice. Do 5º ao 8º, quem caiu nas quartas, e depois quem caiu nas oitavas: na mesma fase, fica na frente quem perdeu para quem foi mais longe. Quando a CO divulgar a oficial, confirme ou ajuste.';
+  else if (m.chave) explicacao = 'A colocação e os pontos saem quando a final da chave tiver resultado.';
   else if (m.tipo === 'coletiva' && lista.length)
     explicacao =
       'Calculada com todos os jogos: a final define campeã e vice; 3º é quem perdeu a semifinal para a campeã e 4º quem perdeu para a vice. Depois vem quem não venceu a repescagem e, por fim, quem não passou dos grupos, pela posição no grupo e pela campanha. Quando a CO divulgar a oficial, confirme ou ajuste.';
@@ -744,7 +755,7 @@ function blocoPrevisaoHistorico(ctx, info, dados) {
       <thead><tr><th class="nome" scope="col">Atlética</th><th scope="col" title="Colocação em 2025">2025</th><th scope="col">Título</th><th scope="col" title="Terminar entre as 3 primeiras">Pódio</th><th scope="col" title="Pontos esperados na geral">Pts</th></tr></thead>
       <tbody>${linhas}</tbody>
     </table></div>
-    <p class="nota">Ainda sem resultado em 2026: a previsão parte da classificação de 2025 nesta modalidade e da força de cada atlética no conjunto das individuais, com bastante incerteza (muita gente entrou e saiu). Quando os resultados forem lançados, valem eles. Só a equipe vê esta parte.</p>`,
+    <p class="nota">${info.m.chave && info.jogos.length ? 'A chave já foi lançada, mas a previsão ainda não usa os jogos dela: ' : 'Ainda sem resultado em 2026: '}a previsão parte da classificação de 2025 nesta modalidade e da força de cada atlética no conjunto das individuais, com bastante incerteza (muita gente entrou e saiu). ${info.m.chave && info.jogos.length ? 'Quando a final tiver resultado, vale a classificação da chave.' : 'Quando os resultados forem lançados, valem eles.'} Só a equipe vê esta parte.</p>`,
   );
 }
 
