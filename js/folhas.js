@@ -1,6 +1,6 @@
 // Folhas de edição: os formulários que sobem de baixo da tela para lançar e corrigir dados.
 
-import { ATLETICAS, DIAS_DE_JOGOS, FASES, LETRAS_GRUPO, MODALIDADE, MODALIDADES } from './dados.js';
+import { ATLETICAS, DIAS_DE_JOGOS, FASES, LETRAS_GRUPO, MODALIDADE, MODALIDADES, fasesDaModalidade } from './dados.js';
 import { ESPORTES, pontosPorColocacao } from './regras.js';
 import { TIPOS_PUNICAO, chaveResultado, gruposDaModalidade } from './modelo.js';
 import { app, abrirFolha, aviso, gravar, salvarPreferencias } from './contexto.js';
@@ -129,6 +129,10 @@ function ligarFormJogo(form, j) {
   };
   form.elements.mod.addEventListener?.('change', () => {
     caixa.innerHTML = camposResultado(j, form.elements.mod.value);
+    // Só as fases da modalidade escolhida; mantém a fase marcada se ela existir nela.
+    const fase = form.elements.fase.value;
+    const daMod = fasesDaModalidade(MODALIDADE[form.elements.mod.value]);
+    form.elements.fase.innerHTML = opcoesFase(form.elements.mod.value, daMod.some((f) => f.id === fase) ? fase : daMod[0].id);
     atualizar();
   });
   for (const campo of ['fase', 'a', 'b']) form.elements[campo].addEventListener('change', atualizar);
@@ -196,6 +200,13 @@ function lerResultado(dados, esporte, fase) {
   return res;
 }
 
+// Opções de fase do formulário: as da modalidade, mais a fase atual do jogo se for outra (jogo antigo).
+function opcoesFase(modId, atual) {
+  const fases = fasesDaModalidade(MODALIDADE[modId]);
+  const lista = fases.some((f) => f.id === atual) ? fases : [...fases, ...FASES.filter((f) => f.id === atual)];
+  return lista.map((f) => `<option value="${f.id}"${f.id === atual ? ' selected' : ''}>${f.nome}</option>`).join('');
+}
+
 export function folhaJogo({ id = null, mod = '', fase = 'grupo', grupo = '' } = {}) {
   const existente = id ? app.estado.jogos[id] : null;
   if (id && !existente) return;
@@ -211,10 +222,10 @@ export function folhaJogo({ id = null, mod = '', fase = 'grupo', grupo = '' } = 
         <option value="">Escolha…</option>
         ${coletivas.map((m) => `<option value="${m.id}">${esc(m.nome)}</option>`).join('')}
       </select></label>`;
+  // Num jogo novo, a fase sugerida que não existe na modalidade (ex.: "grupo" na peteca) vira a primeira que existe.
+  if (!existente && j.mod && !fasesDaModalidade(MODALIDADE[j.mod]).some((f) => f.id === j.fase)) j.fase = fasesDaModalidade(MODALIDADE[j.mod])[0].id;
   const confronto = `<div class="campos-lado">
-      <label class="campo"><span>Fase</span><select name="fase">${FASES.map(
-        (f) => `<option value="${f.id}"${f.id === j.fase ? ' selected' : ''}>${f.nome}</option>`,
-      ).join('')}</select></label>
+      <label class="campo"><span>Fase</span><select name="fase">${opcoesFase(j.mod, j.fase)}</select></label>
       <label class="campo" data-so-grupo><span>Grupo</span><select name="grupo">
         <option value="">—</option>${LETRAS_GRUPO.map((l) => `<option value="${l}"${l === j.grupo ? ' selected' : ''}>Grupo ${l}</option>`).join('')}
       </select></label>
@@ -268,6 +279,10 @@ export function folhaJogo({ id = null, mod = '', fase = 'grupo', grupo = '' } = 
       const m = MODALIDADE[modId];
       if (!m) return 'Escolha a modalidade.';
       const faseEscolhida = dados.get('fase');
+      // A fase tem de existir na modalidade (um jogo antigo pode manter a que já tinha).
+      if (!fasesDaModalidade(m).some((f) => f.id === faseEscolhida) && existente?.fase !== faseEscolhida) {
+        return `${m.nome} não tem ${(FASES.find((f) => f.id === faseEscolhida)?.nome || 'essa fase').toLowerCase()}.`;
+      }
       const grupoEscolhido = faseEscolhida === 'grupo' ? dados.get('grupo') : null;
       const a = dados.get('a');
       const b = dados.get('b');

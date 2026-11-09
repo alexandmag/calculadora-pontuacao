@@ -404,7 +404,7 @@ function seloEstado(info) {
 function resumoModalidade(info) {
   const { m } = info;
   if (m.tipo === 'coletiva') {
-    if (!Object.keys(info.grupos).length) return esc(m.formato);
+    if (!Object.keys(info.grupos).length && !(m.chave && info.jogos.length)) return esc(m.formato);
     const feitos = info.jogos.filter((j) => temResultado(j)).length;
     return `${info.participantes} atléticas · ${feitos} de ${info.jogos.length} jogos com resultado`;
   }
@@ -497,21 +497,41 @@ function blocoGrupos(ctx, info) {
   return secao('Grupos', grupos, { acao: botao });
 }
 
-// Repescagem (só em algumas modalidades), semifinais e final. O botão já sugere a próxima fase que falta.
+// Repescagem (só em algumas modalidades), semifinais e final; na peteca, a chave inteira. O botão já
+// sugere a próxima fase que falta.
 function blocoFinais(ctx, info) {
   const { m } = info;
   const jogos = info.jogos.filter((j) => j.fase !== 'grupo');
   const quantos = (fase) => jogos.filter((j) => j.fase === fase).length;
-  // A repescagem é um triangular (3 jogos) entre os 2º colocados.
-  const proxima = m.repescagem && quantos('repescagem') < 3 && !quantos('semifinal') ? 'repescagem' : quantos('semifinal') < 2 ? 'semifinal' : 'final';
-  const titulo = m.repescagem ? 'Repescagem, semifinal e final' : 'Semifinal e final';
+  // A repescagem é um triangular (3 jogos) entre os 2º colocados. Na chave, a fase que ainda não está completa
+  // (4 jogos de quartas, 2 semifinais, 1 final; as oitavas variam com o número de atléticas).
+  const proxima = m.chave
+    ? quantos('final') || quantos('semifinal') >= 2
+      ? 'final'
+      : quantos('semifinal') || quantos('quartas') >= 4
+        ? 'semifinal'
+        : quantos('quartas')
+          ? 'quartas'
+          : 'oitavas'
+    : m.repescagem && quantos('repescagem') < 3 && !quantos('semifinal')
+      ? 'repescagem'
+      : quantos('semifinal') < 2
+        ? 'semifinal'
+        : 'final';
+  const titulo = m.chave ? 'Chave' : m.repescagem ? 'Repescagem, semifinal e final' : 'Semifinal e final';
   const botao = seEditar(
     ctx,
     `<button type="button" class="botao secundario pequeno" data-acao="novo-jogo" data-mod="${m.id}" data-fase="${proxima}">Adicionar jogo</button>`,
   );
   if (!jogos.length) {
     const fases = m.repescagem ? 'a repescagem, as semifinais e a final' : 'as semifinais e a final';
-    const texto = ctx.pode.editar ? `Quando acabarem os grupos, adicione aqui ${fases}.` : `${fases.charAt(0).toUpperCase()}${fases.slice(1)} aparecem aqui quando acabarem os grupos.`;
+    const texto = m.chave
+      ? ctx.pode.editar
+        ? 'Quando a CO divulgar a chave, adicione aqui os jogos de cada fase.'
+        : 'Os jogos da chave aparecem aqui quando a CO divulgar.'
+      : ctx.pode.editar
+        ? `Quando acabarem os grupos, adicione aqui ${fases}.`
+        : `${fases.charAt(0).toUpperCase()}${fases.slice(1)} aparecem aqui quando acabarem os grupos.`;
     return secao(titulo, vazio(texto), { acao: botao });
   }
   const tabelaRep = info.tabelaRepescagem && info.tabelaRepescagem.tabela.length > 2 ? tabelaDoGrupo(ctx, info, info.tabelaRepescagem) : '';
@@ -594,6 +614,10 @@ function blocoClassificacao(ctx, info) {
   const temEmpate = !oficial && lista.some((l) => l.empatado);
   let explicacao;
   if (oficial) explicacao = 'Classificação oficial divulgada pela CO: é esta que vale na classificação geral.';
+  else if (m.chave && lista.length)
+    explicacao =
+      'Calculada com todos os jogos da chave: a final define campeã e vice; 3º é quem perdeu a semifinal para a campeã e 4º quem perdeu para a vice. Do 5º ao 8º, quem caiu nas quartas, e depois quem caiu nas oitavas: na mesma fase, fica na frente quem perdeu para quem foi mais longe. Quando a CO divulgar a oficial, confirme ou ajuste.';
+  else if (m.chave) explicacao = 'A colocação e os pontos saem quando a final da chave tiver resultado.';
   else if (m.tipo === 'coletiva' && lista.length)
     explicacao =
       'Calculada com todos os jogos: a final define campeã e vice; 3º é quem perdeu a semifinal para a campeã e 4º quem perdeu para a vice. Depois vem quem não venceu a repescagem e, por fim, quem não passou dos grupos, pela posição no grupo e pela campanha. Quando a CO divulgar a oficial, confirme ou ajuste.';
@@ -731,7 +755,7 @@ function blocoPrevisaoHistorico(ctx, info, dados) {
       <thead><tr><th class="nome" scope="col">Atlética</th><th scope="col" title="Colocação em 2025">2025</th><th scope="col">Título</th><th scope="col" title="Terminar entre as 3 primeiras">Pódio</th><th scope="col" title="Pontos esperados na geral">Pts</th></tr></thead>
       <tbody>${linhas}</tbody>
     </table></div>
-    <p class="nota">Ainda sem resultado em 2026: a previsão parte da classificação de 2025 nesta modalidade e da força de cada atlética no conjunto das individuais, com bastante incerteza (muita gente entrou e saiu). Quando os resultados forem lançados, valem eles. Só a equipe vê esta parte.</p>`,
+    <p class="nota">${info.m.chave && info.jogos.length ? 'A chave já foi lançada, mas a previsão ainda não usa os jogos dela: ' : 'Ainda sem resultado em 2026: '}a previsão parte da classificação de 2025 nesta modalidade e da força de cada atlética no conjunto das individuais, com bastante incerteza (muita gente entrou e saiu). ${info.m.chave && info.jogos.length ? 'Quando a final tiver resultado, vale a classificação da chave.' : 'Quando os resultados forem lançados, valem eles.'} Só a equipe vê esta parte.</p>`,
   );
 }
 
@@ -742,9 +766,11 @@ export function modalidade(ctx, id) {
   const topo = cabecalho(m.nome, `${esc(m.formato)} ${seloEstado(info)}`, { voltar: { href: '#/modalidades', texto: 'Modalidades' } });
   if (m.tipo === 'coletiva') {
     const avisoPeteca = info.esporte.semRegraPropria
-      ? '<p class="alerta">O regulamento não define pontos de grupo nem desempate da peteca. O app usa os do vôlei até a CO definir.</p>'
+      ? m.chave
+        ? '<p class="alerta">Chave eliminatória sem disputa de 3º lugar. Até a CO divulgar a classificação oficial, quem caiu na mesma fase fica na frente se perdeu para quem foi mais longe.</p>'
+        : '<p class="alerta">O regulamento não define pontos de grupo nem desempate da peteca. O app usa os do vôlei até a CO definir.</p>'
       : '';
-    return `${topo}${avisoPeteca}${blocoPrevisao(ctx, info)}${blocoGrupos(ctx, info)}${blocoFinais(ctx, info)}${blocoClassificacao(ctx, info)}${blocoPunicoes(ctx, info)}`;
+    return `${topo}${avisoPeteca}${blocoPrevisao(ctx, info)}${m.chave ? '' : blocoGrupos(ctx, info)}${blocoFinais(ctx, info)}${blocoClassificacao(ctx, info)}${blocoPunicoes(ctx, info)}`;
   }
   if (m.tipo === 'provas') {
     return `${topo}${blocoPrevisao(ctx, info)}${blocoProvas(ctx, info)}${blocoPontosProvas(ctx, info)}${blocoClassificacao(ctx, info)}${blocoPunicoes(ctx, info)}`;
@@ -1203,6 +1229,19 @@ function blocoObjetivo(ctx) {
 }
 
 // Início: uma linha por caso, com as modalidades.
+// Marca ao lado da modalidade no resumo da análise: ✓ para vaga garantida ou já conquistada (inclusive pela
+// repescagem), % de ir direto para a semifinal ainda provável e % de chegar à semifinal para quem briga.
+// No mata-mata a % de "ir direto" não diz mais nada (quem venceu a repescagem tinha 0%).
+const JA_DENTRO = ['garantida', 'na-semi', 'na-final', 'final-jogada'];
+export function marcaObjetivo(o) {
+  if (JA_DENTRO.includes(o.motivo)) return ' ✓';
+  const c = o.chances;
+  if (!c || o.motivo === 'parou-semi') return '';
+  if (o.categoria === 'semi') return ` ${pct(o.sit.repescagem ? c.lider : c.semi)}`;
+  if (['repescagem', 'briga'].includes(o.categoria)) return ` ${pct(c.semi)}`;
+  return '';
+}
+
 function resumoObjetivo(ctx) {
   if (!ctx.pode.editar) return '';
   const lista = objetivoDaNossa(ctx);
@@ -1210,13 +1249,7 @@ function resumoObjetivo(ctx) {
   const linhas = CATEGORIAS.map(([cat, titulo]) => {
     const dela = lista.filter((o) => o.categoria === cat);
     if (!dela.length) return '';
-    const mods = dela
-      .map((o) => {
-        const c = o.chances;
-        const extra = o.motivo === 'garantida' ? ' ✓' : cat === 'semi' && c ? ` ${pct(o.sit.repescagem ? c.lider : c.semi)}` : cat === 'repescagem' && c ? ` ${pct(c.semi)}` : cat === 'briga' && c ? ` ${pct(c.semi)}` : '';
-        return `${esc(MODALIDADE[o.mod].curto)}<small>${extra}</small>`;
-      })
-      .join(', ');
+    const mods = dela.map((o) => `${esc(MODALIDADE[o.mod].curto)}<small>${marcaObjetivo(o)}</small>`).join(', ');
     return `<li class="obj-${cat}"><span class="obj-rotulo">${titulo}</span><span class="obj-mods">${mods}</span></li>`;
   }).join('');
   return `<a class="painel resumo-objetivo" href="#/analise"><ul>${linhas}</ul><span class="nota">Semifinal: % de ir direto; repescagem e briga: % de chegar à semifinal. ✓ = garantida. Toque para ver o que cada uma precisa.</span></a>`;
@@ -1233,7 +1266,7 @@ function blocoSituacao(ctx, info) {
   const classificadas = times.filter((t) => t.destino === 'semi' || [ETAPA.semifinalista, ETAPA.finalista].includes(t.etapa));
   const naRepescagem = sit.repescagem ? times.filter((t) => t.destino === 'repescagem' || t.etapa === ETAPA.naRepescagem) : [];
   const pelomenos = sit.repescagem ? times.filter((t) => !t.destino && t.possiveis?.length === 2 && !t.possiveis.includes('fora')) : [];
-  const fora = times.filter((t) => t.destino === 'fora' || (sit.mataMata && [ETAPA.grupos, ETAPA.repescagem, ETAPA.wo].includes(t.etapa)));
+  const fora = times.filter((t) => t.destino === 'fora' || (sit.mataMata && [ETAPA.grupos, ETAPA.repescagem, ETAPA.quartas, ETAPA.oitavas, ETAPA.wo].includes(t.etapa)));
   const itens = [
     classificadas.length ? `<li><span class="selo selo-v">Na semifinal</span> ${nomes(classificadas)}</li>` : '',
     naRepescagem.length ? `<li><span class="selo selo-andamento">Repescagem garantida</span> ${nomes(naRepescagem)}</li>` : '',

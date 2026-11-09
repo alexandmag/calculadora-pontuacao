@@ -67,7 +67,7 @@ transparente, uns 480 px de largura) e coloque `logo: 'img/atleticas/<id>.webp'`
 - **Vôlei sem parciais.** O site oficial só mostra os pontos somados de cada time. Sem as parciais, o app usa esse total no saldo de pontos.
 - **W.O. técnico.** O RG Art. 27 §2º diz “salvo a perda de 12 pontos”. O app lê como *exceto*, então o W.O. técnico tira a atlética da modalidade mas não desconta 12. Dá para mudar em Ajustes.
 - **Jogos de quem deu W.O.** Os jogos anteriores da atlética são cancelados; o jogo do W.O. vale para o adversário com o placar do Anexo 1.
-- **Peteca.** Sem pontos de grupo nem desempate no regulamento: o app usa os do vôlei.
+- **Peteca.** É uma chave eliminatória (oitavas, quartas, semifinal e final, sem disputa de 3º lugar), lançada como jogos com fase. Quem caiu na mesma fase fica na frente se perdeu para quem foi mais longe, como nas coletivas, até a CO divulgar a classificação oficial. Os sets usam a conta do vôlei.
 - **Cartões e sorteio.** Cartões são opcionais no lançamento. Empate em todos os critérios aparece com ≈ e precisa ser resolvido à mão (sorteio).
 
 ## Colocar no ar (GitHub Pages)
